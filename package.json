@@ -19,7 +19,6 @@
   "license": "ISC",
   "dependencies": {
     "@averoa/ave-route": "^1.0.7",
-    "@paroi/express-edge": "^1.0.1",
     "amqplib": "^0.10.0",
     "axios": "^0.27.2",
     "chalk": "^4.1.2",
