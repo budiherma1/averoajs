@@ -50,7 +50,7 @@ Model.knex(DB);
 // view
 app.engine('handlebars', engine());
 app.set('view engine', 'handlebars');
-app.set('views', './resources/views');
+app.set('views', './views');
 
 app.use("/public", express.static(path.join(__dirname, 'public')));
 

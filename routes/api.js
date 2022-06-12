@@ -1,12 +1,5 @@
 const averoute = require('@averoa/ave-route');
 const router = averoute.router;
-const multer  = require('multer')
-const upload = multer({ dest: './storages/tmp/' })
-
-averoute.config({
-	controller: {path: 'app/Controllers/'},
-	middleware: {path: 'app/Middleware/', method: 'handle'},
-});
 
 averoute.get('/', 'HomeController@getDataTest', ['Middleware']);
 averoute.get('/login', 'HomeController@login');
