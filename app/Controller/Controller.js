@@ -3,7 +3,7 @@ const Log = require('../../utility/Log.js')
 const Mail = require('../../utility/Mail.js')
 
 class Controller {
-	constructor() {
+	constructor(req, res) {
 		this.DB = DB;
 		this.Log = Log;
 		this.Mail = Mail;

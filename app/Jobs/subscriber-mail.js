@@ -1,5 +1,5 @@
 'use strict';
-const env = require('../../env.js');
+const env = require('../../averoa/env.js');
 const config = require('../../config/mail');
 const amqplib = require('amqplib/callback_api');
 const nodemailer = require('nodemailer');

@@ -41,6 +41,9 @@ class HomeController extends Controller {
 	async home(req, res) {
 		res.render('home');
 	}
+	async homeEdge(req, res) {
+		res.render('welcome',{greeting: 'SIAPPPP'});
+	}
 	async upload(req, res) {
 		console.log(req.files)
 		console.log(req.body)
