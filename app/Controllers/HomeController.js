@@ -22,10 +22,10 @@ class HomeController extends Controller {
 	}
 	async login(req, res) {
 		let payload = {
-			username: 'budiii',
+			username: 'budi',
 			id: 1
 		}
-		this.Log.warn('testttttttt')
+		this.Log.warn('test warning log')
 		const token = jwt.sign(payload, process.env.TOKEN_SECRET, { expiresIn: '1d' })
 		res.send('hello : '+token);
 	}
@@ -33,6 +33,18 @@ class HomeController extends Controller {
 		// const room = await Rooms.query().findById(2);
 		const room = await Rooms.query();
 		res.send(room)
+	}
+	async sendEmail(req, res) {
+		this.Mail();
+		res.send('sip');
+	}
+	async home(req, res) {
+		res.render('home');
+	}
+	async upload(req, res) {
+		console.log(req.files)
+		console.log(req.body)
+		res.send('upload sip');
 	}
 
 }

@@ -1,6 +1,6 @@
 class Middleware {
 	handle (req, res, next) {
-		console.log(88888)
+		console.log('from middleware')
 		next()
 	}
 }
