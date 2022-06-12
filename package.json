@@ -4,9 +4,16 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "nodemon .",
     "test": "jest",
     "mail": "node app/Jobs/subscriber-mail",
-    "generate:token": "node app/Jobs/generate-token"
+    "generate:token": "node app/Jobs/generate-token",
+    "make:migration": "knex migrate:make",
+    "make:seed": "knex seed:make",
+    "migrate:up": "knex migrate:up",
+    "migrate:down": "knex migrate:down",
+    "migrate:list": "knex migrate:list",
+    "seed": "knex seed:run"
   },
   "author": "",
   "license": "ISC",
