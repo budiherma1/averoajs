@@ -1,4 +1,4 @@
-// const sum = require('./sum');
+// const sum from './sum';
 const sum = (a,b) => {
   return (a*a)+b;
 }

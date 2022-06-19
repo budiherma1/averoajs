@@ -1,7 +1,7 @@
-// const { join } = require('path')
+// const { join } from 'path')
 
 // // CommonJS
-// const { Edge } = require('edge.js')
+// const { Edge } from 'edge.js')
 
 // // Typescript import
 // // import { Edge } from 'edge.js'
@@ -13,7 +13,7 @@
 // const View = async (res, view, data) => {
 // 	return res.send(await edge.render(view,data));
 // }
-// module.exports = View;
+// export default View;
 
 // const html = await edge.render('welcome', {
 //   greeting: 'Hello world'
@@ -21,7 +21,7 @@
 
 'use strict';
 
-const edge = require('edge.js').default;
+import edge from 'edge.js';
 
 const engine = (req, res, next) => {
   /*
@@ -63,4 +63,4 @@ const engine = (req, res, next) => {
   next();
 };
 
-module.exports = { engine };
+export default engine;

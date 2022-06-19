@@ -1,4 +1,4 @@
-const knex = require('knex');
-const config = require('./../config/database.js');
+import knex from 'knex';
+import config from './../config/database.js';
 
-module.exports = knex(config);
+export default knex(config);

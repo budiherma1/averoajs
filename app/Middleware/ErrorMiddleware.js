@@ -1,4 +1,4 @@
-const createError = require('http-errors')
+import createError from 'http-errors';
 
 class ErrorMiddleware {
 	handle(req, res, next) {
@@ -6,4 +6,4 @@ class ErrorMiddleware {
 	}
 }
 
-module.exports = new ErrorMiddleware
+export default new ErrorMiddleware

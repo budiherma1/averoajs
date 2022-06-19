@@ -1,8 +1,8 @@
 'use strict';
-const env = require('../../averoa/env.js');
-const config = require('../../config/mail');
-const amqplib = require('amqplib/callback_api');
-const nodemailer = require('nodemailer');
+import env from '../../averoa/env.js';
+import config from '../../config/mail.js';
+import amqplib from 'amqplib/callback_api.js';
+import nodemailer from 'nodemailer';
 
 // Setup Nodemailer transport
 const transport = nodemailer.createTransport({

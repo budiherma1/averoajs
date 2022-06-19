@@ -1,4 +1,4 @@
-module.exports = {
+export default {
 	amqp: process.env.RABBITMQ_SERVER,
 	queue: "averoa-mail",
   

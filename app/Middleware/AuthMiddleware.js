@@ -1,4 +1,4 @@
-const passport = require('passport');
+import passport from 'passport';
 
 class AuthMiddleware {
 	handle(req, res, next) {
@@ -12,4 +12,4 @@ class AuthMiddleware {
 	}
 }
 
-module.exports = new AuthMiddleware
+export default new AuthMiddleware

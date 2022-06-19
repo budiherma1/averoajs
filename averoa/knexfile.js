@@ -3,9 +3,9 @@
 /**
  * @type { Object.<string, import("knex").Knex.Config> }
  */
-const env = require('./env.js');
-const config = require('./../config/database.js');
-module.exports = {
+ import env from './env.js';
+ import config from './../config/database.js';
+export default {
 
   development: config,
   staging: config,

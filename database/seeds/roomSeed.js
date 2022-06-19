@@ -2,7 +2,7 @@
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> } 
  */
-const { faker } = require('@faker-js/faker');
+ import { faker } from '@faker-js/faker';
 const createData = () => ({
   room_name: faker.name.findName(),
   room_type: faker.random.numeric(),

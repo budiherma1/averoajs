@@ -1,4 +1,4 @@
-const averoute = require('@averoa/ave-route');
+import averoute from '@averoa/ave-route';
 const router = averoute.router;
 
 averoute.get('/', 'HomeController@getDataTest', ['Middleware']);
@@ -9,4 +9,4 @@ averoute.get('/test', 'HomeController@getData');
 averoute.get('/obj', 'HomeController@obj');
 averoute.get('/mail', 'HomeController@sendEmail');
 averoute.post('/upload', 'HomeController@upload',['UploadImagesMiddleware']);
-module.exports = router
+export default router

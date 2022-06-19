@@ -1,7 +1,7 @@
-const { Model } = require('objection');
+import { Model } from 'objection';
 
 class Users extends Model {
   static tableName = 'users';
 }
 
-module.exports = Users;
+export default Users;

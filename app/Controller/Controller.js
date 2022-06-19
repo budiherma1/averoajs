@@ -1,6 +1,6 @@
-const DB = require('../../utility/DB.js');
-const Log = require('../../utility/Log.js')
-const Mail = require('../../utility/Mail.js')
+import DB from '../../utility/DB.js';
+import Log from '../../utility/Log.js';
+import Mail from '../../utility/Mail.js';
 
 class Controller {
 	constructor(req, res) {
@@ -10,4 +10,4 @@ class Controller {
 	}
 }
 
-module.exports = Controller;
+export default Controller;

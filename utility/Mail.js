@@ -1,7 +1,7 @@
 'use strict';
 
-const amqplib = require('amqplib/callback_api');
-const config = require('./../config/mail');
+import amqplib from 'amqplib/callback_api.js';
+import config from './../config/mail.js';
 
 // Create connection to AMQP server
 const sendMail = () => {
@@ -69,4 +69,4 @@ const sendMail = () => {
 	});
 }
 
-module.exports = sendMail;
+export default sendMail;

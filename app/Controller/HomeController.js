@@ -1,6 +1,6 @@
-const Controller = require('./Controller.js');
-const Rooms = require('./../Model/Rooms.js');
-const jwt = require('jsonwebtoken');
+import Controller from './Controller.js';
+import Rooms from './../Model/Rooms.js';
+import jwt from 'jsonwebtoken';
 
 class HomeController extends Controller {
 
@@ -52,4 +52,4 @@ class HomeController extends Controller {
 
 }
 
-module.exports = new HomeController;
+export default new HomeController;

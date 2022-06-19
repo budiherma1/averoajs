@@ -1,4 +1,4 @@
-module.exports = {
+export default {
 	client: 'mysql',
 	connection: {
 		host: process.env.DB_HOST,

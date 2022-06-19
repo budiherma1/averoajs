@@ -5,7 +5,7 @@
 // verbose: 4,
 // debug: 5,
 // silly: 6
-const winston = require('winston');
+import winston from 'winston';
 
 const logger = winston.createLogger({
 	format: winston.format.json(),
@@ -20,4 +20,4 @@ if (process.env.NODE_ENV !== 'production') {
 	}));
 }
 
-module.exports = logger;
+export default logger;

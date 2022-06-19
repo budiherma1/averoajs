@@ -1,4 +1,4 @@
-const cors = require('cors')
+import cors from 'cors';
 
 const whitelist = process.env.CORS_WHITELIST.split(",")
 const corsOptions = {
@@ -11,4 +11,4 @@ const corsOptions = {
   }
 }
 
-module.exports = cors(corsOptions);
+export default cors(corsOptions);

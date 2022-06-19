@@ -1,4 +1,4 @@
-const multer  = require('multer')
+import multer from 'multer';
 
 class UploadImagesMiddleware {
 	handle(req, res, next) {
@@ -7,4 +7,4 @@ class UploadImagesMiddleware {
 	}
 }
 
-module.exports = new UploadImagesMiddleware
+export default new UploadImagesMiddleware
