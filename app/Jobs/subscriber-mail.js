@@ -1,5 +1,5 @@
 'use strict';
-import env from '../../averoa/env.js';
+import {env} from '@averoa/core';
 import config from '../../config/mail.js';
 import amqplib from 'amqplib/callback_api.js';
 import nodemailer from 'nodemailer';

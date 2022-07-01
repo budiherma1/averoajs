@@ -1,12 +1,11 @@
-import averoute from '@averoa/ave-route';
-const router = averoute.router;
+import route, {router} from '@averoa/routes';
 
-averoute.get('/', 'HomeController@getDataTest', ['Middleware']);
-averoute.get('/login', 'HomeController@login');
-averoute.get('/p', 'HomeController@getDataTest', ['AuthMiddleware']);
-averoute.get('/real', 'HomeController@real');
-averoute.get('/test', 'HomeController@getData');
-averoute.get('/obj', 'HomeController@obj');
-averoute.get('/mail', 'HomeController@sendEmail');
-averoute.post('/upload', 'HomeController@upload',['UploadImagesMiddleware']);
+route.get('/', 'HomeController@getDataTest', ['Middleware']);
+route.get('/login', 'HomeController@login');
+route.get('/p', 'HomeController@getDataTest', ['AuthMiddleware']);
+route.get('/real', 'HomeController@real');
+route.get('/test', 'HomeController@getData');
+route.get('/obj', 'HomeController@obj');
+route.get('/mail', 'HomeController@sendEmail');
+route.post('/upload', 'HomeController@upload',['UploadImagesMiddleware']);
 export default router

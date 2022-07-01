@@ -1,8 +1,7 @@
-import averoute from '@averoa/ave-route';
-const router = averoute.router;
+import route, {router} from '@averoa/routes';
 
-averoute.get('/home', 'HomeController@home');
-averoute.get('/edge', 'HomeController@homeEdge');
-averoute.get('/error', 'HomeController@home',['ErrorMiddleware']);
+route.get('/home', 'HomeController@home', ['Middleware']);
+route.get('/edge', 'HomeController@homeEdge');
+route.get('/error', 'HomeController@home',['ErrorMiddleware']);
 
 export default router

@@ -1,3 +1,2 @@
-import averoa from './averoa/index.js'
-averoa();
-// export default averoa;
+import {start} from '@averoa/core'
+start();

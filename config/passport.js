@@ -1,7 +1,7 @@
 import passport from 'passport';
 import {Strategy, ExtractJwt} from 'passport-jwt';
 const opts = {}
-import Users from './../app/Model/Users.js';
+import { Users } from '@averoa/models';
 
 opts.jwtFromRequest = ExtractJwt.fromAuthHeaderAsBearerToken();
 opts.secretOrKey = process.env.TOKEN_SECRET;
