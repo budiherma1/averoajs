@@ -19,7 +19,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@averoa/core": "^1.0.4",
+    "@averoa/core": "^1.0.5",
     "@averoa/helpers": "^1.0.1",
     "@averoa/jobs": "^1.0.1",
     "@averoa/models": "^1.0.1",

@@ -1,7 +1,7 @@
 import Controller from './Controller.js';
 import jwt from 'jsonwebtoken';
 import {Rooms} from '@averoa/models';
-import {DB, Log, Mail} from '@averoa/utilities';
+import {DB, Log, Mail, Queue} from '@averoa/utilities';
 // import {Rooms} from './../Models/index.js';
 
 class HomeController extends Controller {
@@ -43,15 +43,16 @@ class HomeController extends Controller {
 		res.send('sip');
 	}
 	async home(req, res) {
+		// Queue('test channel', {name: 'budi h', number: 8})
 		let aa = await Mail.from('qafrom@mail.com')
 		.to('qato@mail.com')
 		.subject('anama subject')
 		// .html('home', {emailVar: 7777777})
 		.html('<h1>home</h1>')
-		// .queue('channel email tetttt')
+		.queue('Email Channel')
 		.text('atextttttt')
 		.send();
-		console.log(aa)
+		// console.log(aa)
 
 		res.json(aa)
 	}
