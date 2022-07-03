@@ -39,12 +39,21 @@ class HomeController extends Controller {
 		res.send(room)
 	}
 	async sendEmail(req, res) {
-		this.Mail();
+		Mail();
 		res.send('sip');
 	}
 	async home(req, res) {
-		// console.log(888)
-		res.render('home');
+		let aa = await Mail.from('qafrom@mail.com')
+		.to('qato@mail.com')
+		.subject('anama subject')
+		// .html('home', {emailVar: 7777777})
+		.html('<h1>home</h1>')
+		// .queue('channel email tetttt')
+		.text('atextttttt')
+		.send();
+		console.log(aa)
+
+		res.json(aa)
 	}
 	async homeEdge(req, res) {
 		res.render('welcome',{greeting: 'SIAPPPP'});
