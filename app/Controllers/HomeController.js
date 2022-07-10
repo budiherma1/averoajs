@@ -56,12 +56,15 @@ class HomeController extends Controller {
 
 		res.json(aa)
 	}
+	async homeView(req, res) {
+		res.render('home', {emailVar: 6986969869, users: [1,2,3,4,5,6]})
+	}
 	async homeEdge(req, res) {
 		res.render('welcome',{greeting: 'SIAPPPP'});
 	}
 	async upload(req, res) {
-		// console.log(req.files)
-		// console.log(req.body)
+		console.log(req.files)
+		console.log(req.body)
 		res.send('upload sip');
 	}
 

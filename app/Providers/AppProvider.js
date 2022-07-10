@@ -1,10 +1,10 @@
 class AppProvider {
 	beginning(app) {
-		console.log('provider beginning')
+		console.log('AppProvider beginning')
 	}
 
 	end(app) {
-		console.log('provider end')
+		console.log('AppProvider end')
 	}
 }
 

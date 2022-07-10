@@ -47,6 +47,8 @@
     "nodemon": "^2.0.16",
     "objection": "^3.0.1",
     "passport": "^0.6.0",
+    "passport-google-oauth": "^2.0.0",
+    "passport-google-oauth20": "^2.0.0",
     "passport-http-bearer": "^1.0.1",
     "passport-jwt": "^4.0.0",
     "passport-local": "^1.0.0",

@@ -7,5 +7,6 @@ route.get('/real', 'HomeController@real');
 route.get('/test', 'HomeController@getData');
 route.get('/obj', 'HomeController@obj');
 route.get('/mail', 'HomeController@sendEmail');
-route.post('/upload', 'HomeController@upload',['UploadImagesMiddleware']);
+// route.post('/upload', 'HomeController@upload',['UploadImagesMiddleware']);
+route.post('/upload', 'HomeController@upload');
 export default router

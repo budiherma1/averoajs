@@ -1,23 +1,25 @@
 class ViewProvider {
-	inject(view) {
-		view.global('testVariable', 'this is global variable')
-		view.global('sayHello', (value='')=>{
-			return `Hai ${value}, Greeting from ViewProvider`
-		})
-		view.global('menu', [
-			{
-			  url: '/',
-			  text: 'Home',
+	global() {
+		return {
+			testVariable: 'this is global variable',
+			sayHello: (value='') => {
+				return `Hai ${value}, Greeting from ViewProvider`
 			},
-			{
-			  url: '/about',
-			  text: 'About',
-			},
-			{
-			  url: '/contact',
-			  text: 'Contact',
-			},
-		  ])
+			menu: [
+				{
+				  url: '/',
+				  text: 'Home',
+				},
+				{
+				  url: '/about',
+				  text: 'About',
+				},
+				{
+				  url: '/contact',
+				  text: 'Contact',
+				},
+			  ]
+		}
 	}
 }
 
