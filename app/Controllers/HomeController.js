@@ -1,7 +1,7 @@
 import Controller from './Controller.js';
 import jwt from 'jsonwebtoken';
 import {Rooms} from '@averoa/models';
-import {DB, Log, Mail, Queue} from '@averoa/utilities';
+import {DB, Log, Mail, Queue, Auth} from '@averoa/utilities';
 // import {Rooms} from './../Models/index.js';
 
 class HomeController extends Controller {
@@ -22,13 +22,15 @@ class HomeController extends Controller {
 		res.send(a)
 	}
 	async login(req, res) {
-		let payload = {
-			username: 'budi',
-			id: 1
-		}
-		Log.warn('test warning log')
-		const token = jwt.sign(payload, process.env.TOKEN_SECRET, { expiresIn: '1d' })
-		res.send('hello : '+token);
+		// let payload = {
+		// 	username: 'budi',
+		// 	id: 1
+		// }
+		// Log.warn('test warning log')
+		// const token = jwt.sign(payload, process.env.TOKEN_SECRET, { expiresIn: '1d' })
+		// res.send('hello : '+token);
+
+		res.send('login sip')
 	}
 	async obj(req, res) {
 		Log.warn('test obj warning log')
@@ -59,7 +61,12 @@ class HomeController extends Controller {
 	async homeView(req, res) {
 		res.render('home', {emailVar: 6986969869, users: [1,2,3,4,5,6]})
 	}
+	async loginView(req, res) {
+		res.render('login', {emailVar: 6986969869, users: [1,2,3,4,5,6]})
+	}
 	async homeEdge(req, res) {
+		console.log(Auth.check())
+		console.log(Auth.user())
 		res.render('welcome',{greeting: 'SIAPPPP'});
 	}
 	async upload(req, res) {

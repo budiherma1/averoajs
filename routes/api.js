@@ -1,7 +1,8 @@
 import route, {router} from '@averoa/routes';
 
 route.get('/', 'HomeController@getDataTest', ['Middleware']);
-route.get('/login', 'HomeController@login');
+route.get('/login', 'HomeController@loginView');
+route.post('/login', 'HomeController@login', ['LoginMiddleware']);
 route.get('/p', 'HomeController@getDataTest', ['AuthMiddleware']);
 route.get('/real', 'HomeController@real');
 route.get('/test', 'HomeController@getData');
