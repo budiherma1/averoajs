@@ -18,7 +18,7 @@ class JwtStrategy {
 		}));
 	}
 
-	validate(req, res, next) {
+	authenticate(req, res, next) {
 		passport.authenticate('jwt', { session: false }, function (err, user, info) {
 			if (user) {
 				return next();
