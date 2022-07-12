@@ -11,7 +11,7 @@
     "generate:token": "node app/Jobs/generate-token",
     "make:migration": "knex migrate:make --knexfile node_modules/@averoa/core/knexfile.js",
     "make:seed": "knex seed:make --knexfile node_modules/@averoa/core/knexfile.js",
-    "migrate:up": "knex migrate:up --knexfile node_modules/@averoa/core/knexfile.js",
+    "migrate:up": "knex migrate:latest --knexfile node_modules/@averoa/core/knexfile.js",
     "migrate:down": "knex migrate:down --knexfile node_modules/@averoa/core/knexfile.js",
     "migrate:list": "knex migrate:list --knexfile node_modules/@averoa/core/knexfile.js",
     "seed": "knex seed:run --knexfile node_modules/@averoa/core/knexfile.js"
@@ -30,6 +30,7 @@
     "amqplib": "^0.10.0",
     "axios": "^0.27.2",
     "chalk": "^4.1.2",
+    "commander": "^9.3.0",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "dotenv": "^16.0.1",
@@ -52,6 +53,7 @@
     "passport-http-bearer": "^1.0.1",
     "passport-jwt": "^4.0.0",
     "passport-local": "^1.0.0",
+    "validator": "^13.7.0",
     "winston": "^3.7.2"
   },
   "devDependencies": {
