@@ -4,17 +4,17 @@
  */
  import { faker } from '@faker-js/faker';
 const createData = () => ({
-  room_name: faker.name.findName(),
-  room_type: faker.random.numeric(),
-  teacher_id: faker.random.numeric()
+      name: faker.name.firstName(),
+      address: faker.address.streetAddress(true),
+      email: faker.internet.email(),
 });
-exports.seed = async function (knex) {
-  // await knex('rooms').del()
+export let seed = async function (knex) {
+  await knex('users').del()
   let data = [];
   const copies = 10;
   for(let i = 0; i < copies; i++) {
     data.push(createData())
   }
 
-  await knex('rooms').insert(data);
+  await knex('users').insert(data);
 };

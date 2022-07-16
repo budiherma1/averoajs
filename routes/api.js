@@ -1,13 +1,5 @@
 import route, {router} from '@averoa/routes';
 
-route.get('/', 'HomeController@getDataTest', ['Middleware']);
-route.get('/login', 'HomeController@loginView');
-route.post('/login', 'HomeController@login', ['LoginMiddleware']);
-route.get('/p', 'HomeController@getDataTest', ['AuthMiddleware']);
-route.get('/real', 'HomeController@real');
-route.get('/test', 'HomeController@getData');
-route.get('/obj', 'HomeController@obj');
-route.get('/mail', 'HomeController@sendEmail');
-// route.post('/upload', 'HomeController@upload',['UploadImagesMiddleware']);
-route.post('/upload', 'HomeController@upload');
+// for another sample, Please check : https://www.npmjs.com/package/@averoa/ave-route
+route.get('/', 'SampleController@sampleMethod');
 export default router

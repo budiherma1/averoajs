@@ -7,6 +7,10 @@
 	<title>Document</title>
 </head>
 <body>
-	<h1 style="color: aqua">Hello {{ name }}</h1>
+	<ul>
+		@each(user in data)
+		<li>{{ user.name }}</li>
+		@end
+	</ul>
 </body>
 </html>

@@ -1,4 +1,5 @@
 class ViewProvider {
+	// Global variable for view
 	global() {
 		return {
 			testVariable: 'this is global variable',

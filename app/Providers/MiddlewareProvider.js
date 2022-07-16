@@ -1,17 +1,19 @@
-import UploadImagesMiddleware from "../Middleware/UploadImagesMiddleware.js";
-import ErrorMiddleware from "../Middleware/ErrorMiddleware.js";
+// import UploadImagesMiddleware from "../Middleware/UploadImagesMiddleware.js";
 class MiddlewareProvider {
+	// Global middleware for all routes placed in the beginning before another middleware
 	beginning() {
-		console.log('MiddlewareProvider beginning')
-		return [
-			UploadImagesMiddleware,
-		]
+		// sample
+		// return [
+		// 	UploadImagesMiddleware,
+		// ]
 	}
 
+	// Global middleware for all routes placed in the end after another middleware
 	end() {
-		console.log('MiddlewareProvider end')
-		return [
-		]
+		// sample
+		// return [
+		// 	UploadImagesMiddleware,
+		// ]
 	}
 }
 
