@@ -138,3 +138,5 @@ Executing seeder
 ```bash
   npm run seed:run
 ```
+
+# (coming soon)
