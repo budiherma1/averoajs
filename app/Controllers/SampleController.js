@@ -35,7 +35,7 @@ class SampleController {
 			.send();
 
 		let users = await DB.select().from('users');
-		res.send(users)
+		res.send(users);
 	}
 
 }

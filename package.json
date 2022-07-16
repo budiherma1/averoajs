@@ -17,10 +17,13 @@
     "migrate:list": "knex migrate:list --knexfile node_modules/@averoa/core/knexfile.js",
     "seed:run": "knex seed:run --knexfile node_modules/@averoa/core/knexfile.js"
   },
-  "author": "",
+  "author": {
+    "name": "Budi Hermawan",
+    "email": "budianonym@gmail.com"
+  },
   "license": "ISC",
   "dependencies": {
-    "@averoa/core": "^1.0.8",
+    "@averoa/core": "^1.0.9",
     "@averoa/helpers": "^1.0.1",
     "@averoa/jobs": "^1.0.1",
     "@averoa/models": "^1.0.1",
