@@ -44,9 +44,17 @@ class HomeController extends Controller {
 		Mail();
 		res.send('sip');
 	}
+	// async home(req, res) {
+
+	// 	let aa = Mail.$init()
+	// 	console.log(aa)
+	// 	res.json(aa)
+	// }
 	async home(req, res) {
+		// req.home = 'home'
 		// Queue('test channel', {name: 'budi h', number: 8})
-		let aa = await Mail.from('qafrom@mail.com')
+		// let mailOne = Mail
+		let aa = await Mail.init().from('qafrom@mail.com')
 		.to('qato@mail.com')
 		.subject('anama subject')
 		// .html('home', {emailVar: 7777777})
@@ -54,6 +62,38 @@ class HomeController extends Controller {
 		.queue('Email Channel')
 		.text('atextttttt')
 		.send();
+
+		console.log(aa)
+		let bb = await Mail.init().from('aaaa@mail.com')
+		.to('aaaa@mail.com')
+		// .subject('anama subject')
+		// .html('home', {emailVar: 7777777})
+		.html('<h1>aaaa</h1>')
+		.queue('aaaa Channel')
+		.text('aaaa')
+		.send();
+		console.log(bb)
+		// console.log(req)
+		// console.log(aa)
+// console.log(this)
+		res.json(aa)
+	}
+	async home2(req, res) {
+		req.home2 = 'home2'
+		// Queue('test channel', {name: 'budi h', number: 8})
+		// let mailOne = Mail
+		console.log('home2')
+		let aa = await Mail.init().from('22222222@mail.com')
+		// .to('qato@mail.com')
+		// .subject('anama subject')
+		// // .html('home', {emailVar: 7777777})
+		// .html('<h1>home</h1>')
+		.queue('chsnnel2')
+		// .text('atextttttt')
+		.send();
+
+		console.log(aa)
+		// console.log(req)
 		// console.log(aa)
 
 		res.json(aa)

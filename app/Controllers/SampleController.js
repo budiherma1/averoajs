@@ -1,5 +1,6 @@
 class Controller {
-	constructor(req, res) {
+	async sampleMethod(req, res) {
+		
 	}
 }
 
