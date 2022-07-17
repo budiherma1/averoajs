@@ -14,7 +14,7 @@ Install averoajs with npm
   cp .env.example .env
 ```
 
-- Fill the configuration on `.env` file
+
 
 ```bash
   npm install
