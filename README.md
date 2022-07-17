@@ -529,3 +529,11 @@ Import:
 ```bash
 import { Validator } from '@averoa/utilities';
 ```
+
+## Authors
+
+- [@budiherma1](https://www.github.com/budiherma1)
+
+## License
+
+[MIT](https://choosealicense.com/licenses/mit/)
