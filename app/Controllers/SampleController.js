@@ -17,6 +17,15 @@ class SampleController {
 		res.render('users', { data: users });
 	}
 
+	async sampleMethodModelPost(req, res) {
+		
+		let validation = Users.validation.call(Users, req.body);
+		if (validation) return res.send(validation);
+
+		let users = await Users.query();
+		res.send({ data: users });
+	}
+
 	async sampleMethodUtils(req, res) {
 		// Log Utils
 		Log.warn('test warning log');
