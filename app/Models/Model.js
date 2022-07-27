@@ -70,7 +70,7 @@ class Model extends Objection {
 		number = arguments[0];
 		cb = arguments[1];
 		knex = arguments[2];
-		
+
 		await knex(this.tableName).del()
 		let data = []
 
@@ -80,16 +80,17 @@ class Model extends Objection {
 			let custom = cb();
 			for (const key in column) {
 
-				if (typeof column[key].seed == 'function') {
-					let seed = column[key].seed(faker);
-					seeds[key] = seed;
-					column[key].value = seed;
-				}
-
 				if (key in custom) {
 					seeds[key] = custom[key];
 					column[key].value = custom[key];
+				} else {
+					if (typeof column[key].seed == 'function') {
+						let seed = column[key].seed(faker);
+						seeds[key] = seed;
+						column[key].value = seed;
+					}
 				}
+
 			}
 
 			data.push(seeds);
