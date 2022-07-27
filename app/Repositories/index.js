@@ -1,1 +1,1 @@
-export { default as ExampleRepository } from './ExampleRepository.js'
+export { default as ExampleRepository } from './ExampleRepository.js';

@@ -1,2 +1,3 @@
-import { start } from '@averoa/core'
+import { start } from '@averoa/core';
+
 start();

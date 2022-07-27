@@ -1,2 +1,3 @@
-import { command } from '@averoa/core'
+import { command } from '@averoa/core';
+
 command();

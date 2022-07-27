@@ -1,4 +1,4 @@
-
 import { Users } from '@averoa/models';
-export let up = Users.migrationUp.bind(Users);
-export let down = Users.migrationDown.bind(Users);
+
+export const up = Users.migrationUp.bind(Users);
+export const down = Users.migrationDown.bind(Users);

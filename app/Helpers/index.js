@@ -1,1 +1,1 @@
-export { default as ExampleHelper } from './ExampleHelper.js'
+export { default as ExampleHelper } from './ExampleHelper.js';

@@ -1,3 +1,3 @@
 export default {
-	amqp: process.env.RABBITMQ_SERVER,
-}
+  amqp: process.env.RABBITMQ_SERVER,
+};
