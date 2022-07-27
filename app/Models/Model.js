@@ -6,7 +6,9 @@ class Model extends Objection {
   static migrationUp(knex) {
     return knex.schema.createTable(this.tableName, (table) => {
       for (const key in this.column) {
-        this.column[key].migration({ table, knex, column: key });
+        if (this.column[key].migration === 'function') {
+          this.column[key].migration({ table, knex, column: key });
+        }
       }
 
       if (this.timestamp !== false) {
@@ -83,10 +85,12 @@ class Model extends Objection {
         const allValidation = typeof this.column[key].validation === 'object' ? this.column[key].validation : [];
         if (allValidation.length) {
           for (const v of allValidation) {
-            const validation = v.run({ validator, value: `${request[key]}` });
-            if (!validation) {
-              vColumn.push(v.msg);
-              // return { status: false, data: { column: key, message: v.message } }
+            if (typeof v.run === 'function') {
+              const validation = v.run({ validator, value: `${request[key]}` });
+              if (!validation) {
+                vColumn.push(v.msg);
+                // return { status: false, data: { column: key, message: v.message } }
+              }
             }
           }
 
