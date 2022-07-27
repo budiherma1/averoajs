@@ -5,39 +5,39 @@ class Users extends Model {
   static timestamp = true;
   static column = {
     id: {
-      migration: (args) => args.table.increments(args.column).primary(),
+      migration: (m) => m.table.increments(m.column).primary(),
       method: { post: false },
-      validation: [{ validator: (args) => args.validator.isEmail(args.value), message: 'email format required' }],
+      validation: [{ validator: (v) => v.validator.isEmail(v.value), message: 'email format required' }],
     },
     first_name: {
-      migration: (args) => args.table.string(args.column, 50).nullable(),
-      seed: (faker) => faker.name.firstName(),
+      migration: (m) => m.table.string(m.column, 50).nullable(),
+      seed: (f) => f.name.firstName(),
       method: { get: true, post: true },
-      validation: [{ validator: (args) => args.validator.isEmail(args.value), message: 'email format required' }],
+      validation: [{ validator: (v) => v.validator.isEmail(v.value), message: 'email format required' }],
     },
     last_name: {
-      migration: (args) => args.table.string(args.column, 50).nullable(),
-      seed: (faker) => faker.name.firstName(),
+      migration: (m) => m.table.string(m.column, 50).nullable(),
+      seed: (f) => f.name.firstName(),
       method: { get: true, post: true },
-      validation: [{ validator: (args) => args.validator.isEmail(args.value), message: 'email format required' }],
+      validation: [{ validator: (v) => v.validator.isEmail(v.value), message: 'email format required' }],
     },
     email: {
-      migration: (args) => args.table.string(args.column, 50).nullable(),
-      seed: (faker) => faker.internet.email(this.column.first_name.value, this.column.last_name.value),
+      migration: (m) => m.table.string(m.column, 50).nullable(),
+      seed: (f) => f.internet.email(this.column.first_name.value, this.column.last_name.value),
       method: { get: true, post: true },
-      validation: [{ validator: (args) => args.validator.isEmail(args.value), message: 'email format required' }, { validator: (args) => !args.validator.isEmpty(args.value), message: 'email can`t be empty' }],
+      validation: [{ validator: (v) => v.validator.isEmail(v.value), message: 'email format required' }, { validator: (v) => !v.validator.isEmpty(v.value), message: 'email can`t be empty' }],
     },
     address: {
-      migration: (args) => args.table.string(args.column, 255).nullable(),
-      seed: (faker) => faker.address.streetAddress(true),
+      migration: (m) => m.table.string(m.column, 255).nullable(),
+      seed: (f) => f.address.streetAddress(true),
       method: { get: true, post: true },
-      validation: [{ validator: (args) => args.validator.isEmail(args.value), message: 'email format required' }],
+      validation: [{ validator: (v) => v.validator.isEmail(v.value), message: 'email format required' }],
     },
     otp: {
-      migration: (args) => args.table.string(args.column, 10).nullable(),
-      seed: (faker) => faker.name.firstName(),
+      migration: (m) => m.table.string(m.column, 10).nullable(),
+      seed: (f) => f.name.firstName(),
       method: { get: false },
-      validation: [{ validator: (args) => args.validator.isEmail(args.value), message: 'email format required' }],
+      validation: [{ validator: (v) => v.validator.isEmail(v.value), message: 'email format required' }],
     },
   }
 }

@@ -28,19 +28,9 @@ class Model extends Objection {
 
 	static async seeder() {
 
-		let knex;
-		let number;
-
-		if (typeof arguments[0] === 'number') {
-			knex = arguments[1];
-			number = arguments[0];
-		} else {
-			knex = arguments[0];
-			number = 1;
-		}
-
-		console.log(number)
-		// await knex(this.tableName).del()
+		let knex = arguments[arguments.length - 1];
+		let number = typeof arguments[0] === 'number' ? arguments[0] : 1;
+		await knex(this.tableName).del()
 		let data = []
 
 		for (let i = 1; i <= number; i++) {
