@@ -4,4 +4,4 @@ const exec = () => {
   console.log(crypto.randomBytes(64).toString('hex'));
 };
 
-export default exec;
+export default exec();
