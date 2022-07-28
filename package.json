@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node server",
-    "start:dev": "nodemon server",
+    "dev": "nodemon server",
     "test": "jest",
     "mail": "node app/Jobs/EmailSubscriberJob",
     "generate:token": "node app/Jobs/GenerateAppTokenJob",
