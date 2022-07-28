@@ -6,7 +6,7 @@ class Model extends Objection {
   static migrationUp(knex) {
     return knex.schema.createTable(this.tableName, (table) => {
       for (const key in this.column) {
-        if (this.column[key].migration === 'function') {
+        if (typeof this.column[key].migration === 'function') {
           this.column[key].migration({ table, knex, column: key });
         }
       }
