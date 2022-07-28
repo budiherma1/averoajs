@@ -383,11 +383,14 @@ this directory have two files.
 Usage:
 
 ```bash
-import route, {router} from '@averoa/routes';
+import averoa from '@averoa/routes';
 
-route.get('/', 'SampleController@sampleMethod');
-route.get('/', 'SampleController@sampleMethod', ['sampleMiddleware']);
-export default router
+const router = averoa.Router();
+// for another sample, Please check : https://www.npmjs.com/package/@averoa/ave-route
+router.get('/', 'SampleController@sampleMethod');
+router.post('/users', 'SampleController@sampleMethodModelPost');
+
+export default router.router;
 ```
 
 For another pattern, Please check standalone module (ave-route) : https://www.npmjs.com/package/@averoa/ave-route
