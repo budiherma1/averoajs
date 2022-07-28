@@ -1,7 +1,8 @@
-import route, { router } from '@averoa/routes';
+import averoa from '@averoa/routes';
 
+const router = averoa.Router();
 // for another sample, Please check : https://www.npmjs.com/package/@averoa/ave-route
-route.get('/', 'SampleController@sampleMethod');
-route.post('/users', 'SampleController@sampleMethodModelPost');
+router.get('/', 'SampleController@sampleMethod');
+router.post('/users', 'SampleController@sampleMethodModelPost');
 
-export default router;
+export default router.router;
