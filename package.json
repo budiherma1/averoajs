@@ -23,7 +23,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@averoa/core": "^1.0.10",
+    "@averoa/core": "^1.0.11",
     "@averoa/helpers": "^1.0.1",
     "@averoa/jobs": "^1.0.1",
     "@averoa/models": "^1.0.1",
