@@ -76,9 +76,10 @@ Before running migration/seeder command, Please install knex CLI globally
 ```
 ### ________________UPDATE________________
 **migration and seed file will be generated automatically using command.**
-
-`node averoa make:model Modelname`
-**It will generate model, migration and seed file**
+```bash
+  node averoa make:model Modelname
+```
+**It will generate model, migration and seed file.**
 ### ______________________________________
 
 
