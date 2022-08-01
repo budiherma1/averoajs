@@ -1,0 +1,11 @@
+import { Transaction, Model } from 'objection';
+import _FilterQueryBuilder from './lib/FilterQueryBuilder';
+import { sliceRelation as _sliceRelation } from './lib/utils';
+import { createRelationExpression as _createRelationExpression } from './lib/ExpressionBuilder';
+import { BaseModel, FilterQueryBuilderOptions } from './lib/types';
+import { getPropertiesFromExpression as _getPropertiesFromExpression } from './lib/LogicalIterator';
+export declare function buildFilter<M extends BaseModel, K extends typeof Model>(modelClass: K, trx?: Transaction, options?: FilterQueryBuilderOptions<M>): _FilterQueryBuilder<M, K>;
+export declare const FilterQueryBuilder: typeof _FilterQueryBuilder;
+export declare const sliceRelation: typeof _sliceRelation;
+export declare const createRelationExpression: typeof _createRelationExpression;
+export declare const getPropertiesFromExpression: typeof _getPropertiesFromExpression;

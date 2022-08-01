@@ -59,7 +59,7 @@ class Model extends Objection {
     for (let i = 1; i <= number; i++) {
       const seeds = {};
       const column = { ...this.column };
-      const custom = cb();
+      const custom = await cb();
       for (const key in column) {
         if (key in custom) {
           seeds[key] = custom[key];
@@ -77,11 +77,27 @@ class Model extends Objection {
     await knex(this.tableName).insert(data);
   }
 
-  static validation(request) {
+  static validation(request, type = 'create') {
     const validationResult = [];
+    //
+    if (type === 'create') {
+      for (const col in this.column) {
+        if (this.column[col].flag?.required !== false && !request[col]) {
+          return { status: false, data: { column: col, message: 'required' } };
+        }
+      }
+    }
+    //
     for (const key in request) {
       if (key in this.column) {
         const vColumn = [];
+
+        if (type !== 'create') {
+          if (this.column[key].flag.required !== false) {
+            vColumn.push('required');
+          }
+        }
+
         const allValidation = typeof this.column[key].validation === 'object' ? this.column[key].validation : [];
         if (allValidation.length) {
           for (const v of allValidation) {
@@ -96,16 +112,111 @@ class Model extends Objection {
 
           if (vColumn.length) {
             // validationResult.push({ column: key, message: vColumn })
-            return { status: false, data: { column: key, message: vColumn } };
+            const result = { status: false, data: { column: key, message: vColumn } };
+            return result;
           }
         }
       }
     }
+
     if (validationResult.length) {
       return { status: false, data: validationResult };
     }
+
     return { status: true };
+  }
+
+  static validationRouter(req, res, next, additional = {}) {
+    const validationResult = [];
+    const data = additional.type === 'multipart' ? req.body : req.query;
+    //
+    if (additional.post) {
+      for (const col in this.column) {
+        if (this.column[col].flag?.required !== false && !data[col]) {
+          return res.send({ status: false, data: { column: col, message: 'required' } });
+        }
+      }
+    }
+    //
+    for (const key in data) {
+      if (key in this.column) {
+        const vColumn = [];
+
+        if (!additional.post) {
+          if (this.column[key].flag.required !== false && !data[key]) {
+            vColumn.push('required');
+          }
+        }
+
+        const allValidation = typeof this.column[key].validation === 'object' ? this.column[key].validation : [];
+        if (allValidation.length) {
+          for (const v of allValidation) {
+            if (typeof v.run === 'function') {
+              const validation = v.run({ validator, value: `${data[key]}` });
+              if (!validation) {
+                vColumn.push(v.msg);
+                // return { status: false, data: { column: key, message: v.message } }
+              }
+            }
+          }
+        }
+
+        if (vColumn.length) {
+          // validationResult.push({ column: key, message: vColumn })
+          const result = { status: false, data: { column: key, message: vColumn } };
+          return res.send(result);
+        }
+      }
+    }
+    const result = { status: false, data: validationResult };
+    if (validationResult.length) {
+      return res.send(result);
+    }
+    return next();
+  }
+
+  static sanitizeRequest(req, res, next, additional = {}) {
+    const sanitized = {};
+
+    const data = additional.type === 'multipart' ? req.body : req.query;
+
+    for (const key in data) {
+      if (key in this.column) {
+        sanitized[key] = data[key];
+      }
+    }
+
+    if (additional.type === 'multipart') {
+      req.body = sanitized;
+    } else {
+      req.query = sanitized;
+    }
+
+    return next();
+  }
+
+  static search(query, search) {
+    for (const key in this.column) {
+      if (this.column[key].flag?.search !== false) {
+        query = query.orWhere(key, 'like', `%${search}%`);
+      }
+    }
+    return query;
+  }
+
+  static mapRequest(req, res, next, additional = {}) {
+    if (additional.type === 'multipart') {
+      req.dataReq = { ...req.body };
+    } else {
+      req.dataReq = { ...req.query };
+    }
+    return next();
   }
 }
 
 export default Model;
+
+// rangeStart 7
+// rangeEnd 2
+
+// select `teacher`.* from `teacher` limit -4 offset 7

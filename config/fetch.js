@@ -8,26 +8,26 @@ export default {
   // `baseURL` will be prepended to `url` unless `url` is absolute.
   // It can be convenient to set `baseURL` for an instance of axios to pass relative URLs
   // to methods of that instance.
-  baseURL: 'https://some-domain.com/api',
+  baseURL: 'https://jsonplaceholder.typicode.com',
 
   // `transformRequest` allows changes to the request data before it is sent to the server
   // This is only applicable for request methods 'PUT', 'POST', 'PATCH' and 'DELETE'
   // The last function in the array must return a string or an instance of Buffer, ArrayBuffer,
   // FormData or Stream
   // You may modify the headers object.
-  transformRequest: [function (data, headers) {
-	  // Do whatever you want to transform the data
+  // transformRequest: [function (data, headers) {
+  //   // Do whatever you want to transform the data
 
-	  return data;
-  }],
+  //   return data;
+  // }],
 
   // `transformResponse` allows changes to the response data to be made before
   // it is passed to then/catch
-  transformResponse: [function (data) {
-	  // Do whatever you want to transform the data
+  // transformResponse: [function (data) {
+  //   // Do whatever you want to transform the data
 
-	  return data;
-  }],
+  //   return data;
+  // }],
 
   // `headers` are custom headers to be sent
   headers: { 'X-Requested-With': 'XMLHttpRequest' },
@@ -35,15 +35,15 @@ export default {
   // `params` are the URL parameters to be sent with the request
   // Must be a plain object or a URLSearchParams object
   // NOTE: params that are null or undefined are not rendered in the URL.
-  params: {
-	  ID: 12345,
-  },
+  // params: {
+  //   ID: 12345,
+  // },
 
   // `paramsSerializer` is an optional function in charge of serializing `params`
   // (e.g. https://www.npmjs.com/package/qs, http://api.jquery.com/jquery.param/)
-  paramsSerializer(params) {
-	  return Qs.stringify(params, { arrayFormat: 'brackets' });
-  },
+  // paramsSerializer(params) {
+  //   return Qs.stringify(params, { arrayFormat: 'brackets' });
+  // },
 
   // `data` is the data to be sent as the request body
   // Only applicable for request methods 'PUT', 'POST', 'DELETE', and 'PATCH'
@@ -51,14 +51,14 @@ export default {
   // - string, plain object, ArrayBuffer, ArrayBufferView, URLSearchParams
   // - Browser only: FormData, File, Blob
   // - Node only: Stream, Buffer
-  data: {
-	  firstName: 'Fred',
-  },
+  // data: {
+  //   firstName: 'Fred',
+  // },
 
   // syntax alternative to send data into the body
   // method post
   // only the value is sent, not the key
-  data: 'Country=Brasil&City=Belo Horizonte',
+  // data: 'Country=Brasil&City=Belo Horizonte',
 
   // `timeout` specifies the number of milliseconds before the request times out.
   // If the request takes longer than `timeout`, the request will be aborted.
@@ -70,19 +70,19 @@ export default {
 
   // `adapter` allows custom handling of requests which makes testing easier.
   // Return a promise and supply a valid response (see lib/adapters/README.md).
-  adapter(config) {
-	  /* ... */
-  },
+  // adapter(config) {
+  //   /* ... */
+  // },
 
   // `auth` indicates that HTTP Basic auth should be used, and supplies credentials.
   // This will set an `Authorization` header, overwriting any existing
   // `Authorization` custom headers you have set using `headers`.
   // Please note that only HTTP Basic auth is configurable through this parameter.
   // For Bearer tokens and such, use `Authorization` custom headers instead.
-  auth: {
-	  username: 'janedoe',
-	  password: 's00pers3cret',
-  },
+  // auth: {
+  //   username: 'janedoe',
+  //   password: 's00pers3cret',
+  // },
 
   // `responseType` indicates the type of data that the server will respond with
   // options are: 'arraybuffer', 'document', 'json', 'text', 'stream'
@@ -101,15 +101,15 @@ export default {
 
   // `onUploadProgress` allows handling of progress events for uploads
   // browser only
-  onUploadProgress(progressEvent) {
-	  // Do whatever you want with the native progress event
-  },
+  // onUploadProgress(progressEvent) {
+  //   // Do whatever you want with the native progress event
+  // },
 
   // `onDownloadProgress` allows handling of progress events for downloads
   // browser only
-  onDownloadProgress(progressEvent) {
-	  // Do whatever you want with the native progress event
-  },
+  // onDownloadProgress(progressEvent) {
+  //   // Do whatever you want with the native progress event
+  // },
 
   // `maxContentLength` defines the max size of the http response content in bytes allowed in node.js
   maxContentLength: 2000,
@@ -121,9 +121,9 @@ export default {
   // HTTP response status code. If `validateStatus` returns `true` (or is set to `null`
   // or `undefined`), the promise will be resolved; otherwise, the promise will be
   // rejected.
-  validateStatus(status) {
-	  return status >= 200 && status < 300; // default
-  },
+  // validateStatus(status) {
+  //   return status >= 200 && status < 300; // default
+  // },
 
   // `maxRedirects` defines the maximum number of redirects to follow in node.js.
   // If set to 0, no redirects will be followed.
@@ -152,15 +152,15 @@ export default {
   // This will set an `Proxy-Authorization` header, overwriting any existing
   // `Proxy-Authorization` custom headers you have set using `headers`.
   // If the proxy server uses HTTPS, then you must set the protocol to `https`.
-  proxy: {
-	  protocol: 'https',
-	  host: '127.0.0.1',
-	  port: 9000,
-	  auth: {
-      username: 'mikeymike',
-      password: 'rapunz3l',
-	  },
-  },
+  // proxy: {
+  //   protocol: 'https',
+  //   host: '127.0.0.1',
+  //   port: 9000,
+  //   auth: {
+  //     username: 'mikeymike',
+  //     password: 'rapunz3l',
+  //   },
+  // },
 
   // `cancelToken` specifies a cancel token that can be used to cancel the request
   // (see Cancellation section below for details)
