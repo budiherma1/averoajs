@@ -217,6 +217,17 @@ class Model extends Objection {
   static filterSearch(filter) {
     return FilterSearch.model(this, filter);
   }
+
+  static async checkParamId(req, res, next) {
+    if (req.params?.id) {
+      const count = await this.query().findById(req.params.id).count();
+      if (count['count(*)'] > 0) {
+        return next();
+      }
+      return res.send({ status: false, message: `ID ${req.params.id} doesn't exist` });
+    }
+    return next();
+  }
 }
 
 export default Model;
