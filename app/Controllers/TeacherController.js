@@ -1,6 +1,6 @@
 import {
   DB, Log, Mail, Queue, Fetch,
-  FindQuery,
+  FilterSearch,
 } from '@averoa/utilities';
 import { Teacher } from '@averoa/models';
 import moment from 'moment';
@@ -12,7 +12,8 @@ class TeacherController {
   }
 
   async findAll(req, res) {
-    const data = await FindQuery(Teacher).build(req.dataReq);
+    // const data = await Teacher.filterSearch.call(Teacher, req);
+    const data = await FilterSearch.knex(DB('teacher'), req);
     res.send(data);
   }
 

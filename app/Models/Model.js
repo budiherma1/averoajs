@@ -1,6 +1,7 @@
 import { Model as Objection } from 'objection';
 import { faker } from '@faker-js/faker';
 import validator from 'validator';
+import { FilterSearch } from '@averoa/utilities';
 
 class Model extends Objection {
   static migrationUp(knex) {
@@ -205,18 +206,17 @@ class Model extends Objection {
   }
 
   static mapRequest(req, res, next, additional = {}) {
-    if (additional.type === 'multipart') {
+    if (additional?.type === 'multipart') {
       req.dataReq = { ...req.body };
     } else {
       req.dataReq = { ...req.query };
     }
     return next();
   }
+
+  static filterSearch(filter) {
+    return FilterSearch.model(this, filter);
+  }
 }
 
 export default Model;
-
-// rangeStart 7
-// rangeEnd 2
-
-// select `teacher`.* from `teacher` limit -4 offset 7
