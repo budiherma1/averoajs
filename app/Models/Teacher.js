@@ -1,4 +1,4 @@
-import Model from './Model.js';
+import { Model } from '@averoa/utilities';
 import Rooms from './Rooms.js';
 
 class Teacher extends Model {

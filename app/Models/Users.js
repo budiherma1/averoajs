@@ -1,4 +1,4 @@
-import Model from './Model.js';
+import { Model } from '@averoa/utilities';
 
 class Users extends Model {
   static tableName = 'users';
@@ -36,7 +36,7 @@ class Users extends Model {
       validation: [{ run: (v) => v.validator.isEmail(v.value), msg: 'email format required' }],
     },
     otp: {
-      migration: (m) => m.table.string(m.column, 10).nullable(),
+      migration: (m) => m.table.string(m.column, 20).nullable(),
       seed: (f) => f.name.firstName(),
       method: { get: false },
       validation: [{ run: (v) => v.validator.isEmail(v.value), msg: 'email format required' }],

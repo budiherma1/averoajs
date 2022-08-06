@@ -12,8 +12,8 @@ class TeacherController {
   }
 
   async findAll(req, res) {
-    // const data = await Teacher.filterSearch.call(Teacher, req);
-    const data = await FilterSearch.knex(DB('teacher'), req);
+    const data = await Teacher.filterSearch.call(Teacher, req);
+    // const data = await FilterSearch.knex(DB('teacher'), req);
     res.send(data);
   }
 

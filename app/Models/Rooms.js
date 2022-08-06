@@ -1,4 +1,4 @@
-import Model from './Model.js';
+import { Model } from '@averoa/utilities';
 
 class Rooms extends Model {
   static tableName = 'rooms';
