@@ -12,7 +12,7 @@ class TeacherController {
   }
 
   async findOne(req, res) {
-    const data = await Crud.findOne('Teacher', req, { relations: 'rooms' });
+    const data = await Crud.findOne('Teacher', req);
     res.send(data);
   }
 
@@ -22,7 +22,7 @@ class TeacherController {
   }
 
   async delete(req, res) {
-    const data = await Crud.delete('Teacher', req, { update: { deleted_by: 8 } });
+    const data = await Crud.delete('Teacher', req);
     res.send(data);
   }
 }
