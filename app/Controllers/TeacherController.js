@@ -1,6 +1,10 @@
 import { Crud } from '@averoa/utilities';
 
 class TeacherController {
+  async index(req, res) {
+    res.render('teacher', { name: 'Teacher Page', title: 'Averoa' });
+  }
+
   async create(req, res) {
     const data = await Crud.create('Teacher', req);
     res.send(data);
