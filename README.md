@@ -18,7 +18,7 @@ Install averoajs with npm
 
 ```bash
   npm install
-  npm run start:dev
+  npm run dev
 ```
 
 ## Directory Structure
