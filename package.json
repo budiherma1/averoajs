@@ -29,7 +29,7 @@
     "@averoa/providers": "^1.0.1",
     "@averoa/repositories": "^1.0.1",
     "@averoa/routes": "^1.0.12",
-    "@averoa/utilities": "^1.0.18",
+    "@averoa/utilities": "^1.0.19",
     "amqplib": "^0.10.0",
     "axios": "^0.27.2",
     "chalk": "^4.1.2",
