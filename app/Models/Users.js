@@ -8,37 +8,37 @@ class Users extends Model {
   static column = {
     id: {
       migration: (m) => m.table.increments(m.column).primary(),
-      method: { post: false },
+      flag: { required: false },
       validation: [{ run: (v) => v.validator.isEmail(v.value), msg: 'email format required' }],
     },
     first_name: {
       migration: (m) => m.table.string(m.column, 50).nullable(),
       seed: (f) => f.name.firstName(),
-      method: { get: true, post: true },
+      flag: { required: true },
       validation: [{ run: (v) => v.validator.isEmail(v.value), msg: 'email format required' }],
     },
     last_name: {
       migration: (m) => m.table.string(m.column, 50).nullable(),
       seed: (f) => f.name.firstName(),
-      method: { get: true, post: true },
+      flag: { required: true },
       validation: [{ run: (v) => v.validator.isEmail(v.value), msg: 'email format required' }],
     },
     email: {
       migration: (m) => m.table.string(m.column, 50).nullable(),
       seed: (f) => f.internet.email(this.column.first_name.value, this.column.last_name.value),
-      method: { get: true, post: true },
+      flag: { required: true },
       validation: [{ run: (v) => v.validator.isEmail(v.value), msg: 'email format required' }, { run: (v) => !v.validator.isEmpty(v.value), msg: 'email can`t be empty' }],
     },
     address: {
       migration: (m) => m.table.string(m.column, 255).nullable(),
       seed: (f) => f.address.streetAddress(true),
-      method: { get: true, post: true },
+      flag: { required: true },
       validation: [{ run: (v) => v.validator.isEmail(v.value), msg: 'email format required' }],
     },
     otp: {
       migration: (m) => m.table.string(m.column, 20).nullable(),
       seed: (f) => f.name.firstName(),
-      method: { get: false },
+      flag: { required: true },
       validation: [{ run: (v) => v.validator.isEmail(v.value), msg: 'email format required' }],
     },
   };

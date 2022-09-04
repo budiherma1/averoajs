@@ -1,5 +1,9 @@
 class ViewProvider {
-  // Global variable for view
+  /**
+   * [Global variable for view]
+   *
+   * @return  {[object]}  [object of global variable used in view]
+   */
   global() {
     return {
       testVariable: 'this is global variable',

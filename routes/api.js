@@ -10,7 +10,7 @@ router.crud('Teacher', 'teachers', () => { // first parameter is the models name
   router.get('/', 'TeacherController@findAll');
   router.get('/:id', 'TeacherController@findOne');
   router.post('/', 'TeacherController@create'); // use router.postForm if the request use multipart/form
-  router.put('/:id', 'TeacherController@update'); // use router.patchForm if the request use multipart/form
+  router.put('/:id', 'TeacherController@update'); // use router.putForm router.patchForm if the request use multipart/form
   router.delete('/:id', 'TeacherController@delete');
 });
 

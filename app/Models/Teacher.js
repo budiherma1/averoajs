@@ -62,7 +62,7 @@ class Teacher extends Model {
     },
   };
 
-  static relationMappings = {
+  static relationMappings = () => ({
     rooms: {
       relation: Model.HasManyRelation,
       modelClass: Rooms,
@@ -71,7 +71,7 @@ class Teacher extends Model {
         to: 'rooms.teacher_id',
       },
     },
-  };
+  });
 }
 
 export default Teacher;
