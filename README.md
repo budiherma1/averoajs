@@ -1,4 +1,4 @@
-![alt text](https://averoa.com/averoa.png)
+![alt text](https://averoajs.com/img/g19580.png)
 # AveroaJS
 
 'Laravel Like' Boilerplate built on express
