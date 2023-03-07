@@ -14,4 +14,4 @@ router.crud('Teacher', 'teachers', () => { // first parameter is the models name
   router.delete('/:id', 'TeacherController@delete');
 });
 
-export default router.router;
+export default router;

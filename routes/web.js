@@ -6,4 +6,4 @@ router.get('/', 'SampleController@sampleMethodView');
 router.get('/users', 'SampleController@sampleMethodModel');
 router.get('/teacher', 'TeacherController@index');
 
-export default router.router;
+export default router;
