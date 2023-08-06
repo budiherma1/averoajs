@@ -69,7 +69,7 @@ orderBy
 orderByDesc
 groupBy
 limit
-offset
+page
 $relations (relation name set on module, see on objectionjs documentation)
 
 sample:
