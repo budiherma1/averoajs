@@ -24,6 +24,18 @@ class AppProvider {
     // app.use(bodyParser.json())
     // app.use(bodyParser.urlencoded({ extended: true }))
   }
+
+  /**
+   * [Configuration for expressjs(app) placed after express server started]
+   *
+   * @param   {[object]}  server  [server server instance of express]
+   *
+   * @return  {[void]}
+   */
+  server(server) {
+    // sample
+    // const io = new Server(server);
+  }
 }
 
 export default new AppProvider;
