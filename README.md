@@ -261,11 +261,11 @@ beginning(app) {
 
 }
 ```
-this class have 2 method, beginning and end.
+this class have 3 method, beginning, end and server.
 
 Beginning means, all setup will be executed before another module have been init/setup.
-
-Then for end method, all setup under this method will be executed after another module have been init/setup.
+End means, all setup under this method will be executed after another module have been init/setup.
+Then for server method, all setup under this method will be executed after another module have been init/setup but after http server started.
 
 **MiddlewareProvider**
 
@@ -445,7 +445,7 @@ const router = Router();
 router.get('/', 'SampleController@sampleMethodView');
 router.get('/users', 'SampleController@sampleMethodModel');
 
-export default router.router;
+export default router;
 ```
 
 For another pattern, Please check standalone module (ave-route) : https://www.npmjs.com/package/@averoa/ave-route
