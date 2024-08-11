@@ -1,4 +1,4 @@
-export default {
+export default () => ({
   client: process.env.DB_CLIENT || 'mysql',
   connection: {
     host: process.env.DB_HOST,
@@ -8,4 +8,4 @@ export default {
     database: process.env.DB_NAME,
     dateStrings: true,
   },
-};
+});

@@ -1,4 +1,4 @@
-![alt text](https://averoajs.com/img/g19580.png)
+![alt text](https://averoajs.netlify.app/img/g19580.png)
 # AveroaJS
 
 'Laravel Like' Boilerplate built on express
