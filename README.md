@@ -52,28 +52,72 @@ this endpoint is to get all data of the table. You can use query parameter below
 
 ```bash
 :eq (=)
+user_id:eq=44
+
 :neq (!=)
+user_id:neq=44
+
 :lt (<)
+amount:lt=44
+
 :lte (<=)
+amount:lte=44
+
 :gt (>)
+amount:gt=44
+
 :gte (>=)
+amount:gte=44
+
 :like (like case sensitive)
+name:like=%mr%
+
 :ilike (like case insensitive)
+name:ilike=%Mr%
+
 :in (in)
+id:in=1,2,3,4
+
 :notNull (not null)
+deleted_at:notNull=true
+
 :isNull (is null)
+deleted_at:isNull=true
+
 :btwn (between)
+amount:btwn=2000, 5000
 
 columnName (all column name that exist on the table)
+amount=5000 , id=6, etc
+
 orderBy
+orderBy=id
+
 orderByDesc
+orderByDesc=id
+
 groupBy
+groupBy=type
+
 limit
+limit=100 , limit=0 means no limit
+
 page
+page=1
+
 $relations (relation name set on module, see on objectionjs documentation)
+$relations=[user_roles, login_history]
 
 sample:
-user_id:eq=44&orderBy=created_at&limit=20
+https://localhost:8888?user_id:eq=44&orderBy=created_at&limit=20
+
+each query params also can have multiple key.
+title|category_name|date:ilike=%abc%
+title|category_name|date:like=%abc%
+amount|number|total_price:lt=44
+
+query search sample:
+https://localhost:8888?amount|number|total_price:lt=44
 ```
 
 
