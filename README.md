@@ -153,7 +153,7 @@ Open <http://localhost:8888> for the welcome page, or call the API:
 
 ```bash
 curl http://localhost:8888/api
-# {"name":"Averoa","version":"2.2.0"}
+# {"name":"Averoa","version":"2.2.1"}
 
 curl -X POST http://localhost:8888/api/auth/login \
   -H 'content-type: application/json' \
@@ -2216,7 +2216,7 @@ The complete list of breaking changes is in each package's changelog:
 
 | Package | Version | Description | Links |
 | --- | --- | --- | --- |
-| averoajs | 2.2.0 | This application boilerplate (not published to npm) | [GitHub](https://github.com/budiherma1/averoajs) |
+| averoajs | 2.2.1 | This application boilerplate (not published to npm) | [GitHub](https://github.com/budiherma1/averoajs) |
 | `@averoa/core` | 2.1.0 | Builds the Express app (security, sessions, CSRF, CORS, views, routes, errors, shutdown), the knexfile and the `averoa` CLI | [GitHub](https://github.com/budiherma1/AveroaCore) · [npm](https://www.npmjs.com/package/@averoa/core) |
 | `@averoa/routes` | 3.1.0 | Laravel-style router: `'Controller@method'`, scopes, `*Form` routes, `crud()` hooks | [GitHub](https://github.com/budiherma1/AveroaRoute) · [npm](https://www.npmjs.com/package/@averoa/routes) |
 | `@averoa/utilities` | 2.1.0 | Model, Crud, FilterSearch, DB, Mail, Queue, mail worker, View, Log, Fetch, Validator | [GitHub](https://github.com/budiherma1/AveroaUtilities) · [npm](https://www.npmjs.com/package/@averoa/utilities) |

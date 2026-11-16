@@ -43,6 +43,9 @@ export function setTestEnv(overrides = {}) {
     AVEROA_ROOT: APP_ROOT,
     ...testDatabaseEnv(),
     TOKEN_SECRET: randomBytes(32).toString('hex'),
+    // JWT_* blank: a project's .env (copied from .env.example) must not change the token lifetimes
+    JWT_ACCESS_TTL: '',
+    JWT_REFRESH_TTL: '',
     TOKEN_EXPIRES_IN: '5m',
     SESSION_SECRET: randomBytes(32).toString('hex'),
     CSRF_ENABLED: 'true',

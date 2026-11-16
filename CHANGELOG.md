@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.1
+
+### Fixed
+
+- The test suite passes in a project created by create-averoa: it no longer reads `JWT_ACCESS_TTL` /
+  `JWT_REFRESH_TTL` from the project's `.env`, and the OpenAPI test compares with the project's own version.
+
 ## 2.2.0
 
 ### Added

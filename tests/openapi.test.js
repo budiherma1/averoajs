@@ -2,6 +2,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import fs from 'node:fs';
 import path from 'node:path';
 import { APP_ROOT, setTestEnv, client } from './helpers.js';
 
@@ -41,7 +42,9 @@ after(async () => {
 test('GET /api/openapi.json describes the app (AppProvider.openapi sets the title)', () => {
   assert.equal(doc.openapi, '3.1.0');
   assert.equal(doc.info.title, 'AveroaJS API');
-  assert.equal(doc.info.version, '2.2.0');
+  // the version of this project's package.json (create-averoa sets its own)
+  const { version } = JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'package.json'), 'utf8'));
+  assert.equal(doc.info.version, version);
 });
 
 test('teachers CRUD is documented with the model schema, filters and auth on writes', () => {
