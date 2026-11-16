@@ -1618,14 +1618,30 @@ node averoa make:crud --help
 | --- | --- | --- |
 | `make:controller <name>` | `app/Controllers/<name>.js` | `-f, --force` |
 | `make:middleware <name>` | `app/Middleware/<name>.js` | `-f, --force` |
-| `make:model <name>` | `app/Models/<name>.js`, added to `app/Models/index.js` | `-t, --table <table>` (default: the lower-cased name), `-f, --force` |
+| `make:model <name>` | `app/Models/<name>.js`, added to `app/Models/index.js`; with `-m` a migration built from its columns, with `-s` a seeder | `-t, --table <table>` (default: the lower-cased name), `-m, --migration`, `-s, --seed`, `-f, --force` |
+| `make:policy <name>` | `app/Policies/<name>.js`; register it in `app/Providers/AuthProvider.js` (the command prints the line) | `--model <model>` (default: the name without `Policy`), `-f, --force` |
+| `make:validator <name>` | `app/Validators/<name>.js`, rule sets to use as route middleware | `-f, --force` |
 | `make:helper <name>` | `app/Helpers/<name>.js`, added to the index | `-f, --force` |
 | `make:job <name>` | `app/Jobs/<name>.js` (a `Job` subclass), added to the index | `-f, --force` |
 | `make:repository <name>` | `app/Repositories/<name>.js`, added to the index | `-f, --force` |
 | `make:strategy <name>` | `app/Strategies/<name>.js`, added to the index | `-f, --force` |
+| `make:migration <name>` | `database/migrations/<timestamp>_<name>.js` | `-c, --create <table>`, `-t, --table <table>`, `-f, --force` |
+| `make:test <name>` | `tests/<name>.test.js` (`npm test` picks it up) | `--http` (start the app and call it over HTTP), `-f, --force` |
 | `make:crud <tables>` | per table: model, migration, seeder and controller; `crud()` routes in `routes/api.js` | `-i, --init`, `-f, --force` |
 
-Names must be JavaScript identifiers and table names may contain only letters, digits and underscores. Existing files
+A typical new resource:
+
+```bash
+node averoa make:model Post --table posts -m -s   # model, migration from its columns, seeder
+node averoa make:controller PostController
+node averoa make:validator PostValidator           # [PostValidator.store] as route middleware
+node averoa make:policy PostPolicy                 # then add [Post, PostPolicy] to AuthProvider.policies()
+node averoa make:test posts --http
+npm run migrate:up
+```
+
+Names must be JavaScript identifiers (`make:migration` and `make:test` take file names: letters, digits, `_`, `-`)
+and table names may contain only letters, digits and underscores. Existing files
 are never overwritten without `--force`.
 
 ### `make:crud`
