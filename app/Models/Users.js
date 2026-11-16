@@ -46,7 +46,8 @@ class Users extends Model {
     password: {
       // seeders insert through raw knex (no model hooks), so the seed value is hashed already
       seed: () => PasswordHelper.hashSync('password'),
-      flag: { required: true, search: false, writable: true }, // hidden, but clients may set it (hashed in $beforeInsert/$beforeUpdate)
+      // hidden, but clients may set it (hashed in $beforeInsert/$beforeUpdate)
+      flag: { required: true, search: false, writable: true },
       validation: [{ run: (v) => v.validator.isLength(String(v.value), { min: 8, max: 128 }), msg: 'must be 8-128 characters' }],
     },
     address: {

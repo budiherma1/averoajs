@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/budiherma1/averoajs"><img src="https://img.shields.io/github/package-json/v/budiherma1/averoajs/master?label=version&logo=github" alt="version"></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/node-%3E%3D18.17-339933?logo=node.js&logoColor=white" alt="Node.js >= 18.17">
+  <img src="https://img.shields.io/badge/node-%3E%3D20.19-339933?logo=node.js&logoColor=white" alt="Node.js >= 20.19">
   <img src="https://img.shields.io/badge/express-5-000000?logo=express&logoColor=white" alt="Express 5">
   <img src="https://img.shields.io/badge/module-ESM-f7df1e" alt="ESM only">
 </p>
@@ -33,7 +33,7 @@ AveroaJS is a boilerplate for building REST APIs and server-rendered apps on **E
 **Objection 3**. It gives you a Laravel-style project layout, one-command CRUD scaffolding, a query-string filter
 language, JWT and session auth, and security middleware that is already configured.
 
-> **Version 2** needs **Node.js 18.17 or newer** and is **ESM only**. Coming from 1.x? Read
+> **Version 2** needs **Node.js 20.19 or newer** and is **ESM only**. Coming from 1.x? Read
 > [Upgrading from 1.x](#-upgrading-from-1x).
 
 ## ✨ Why AveroaJS
@@ -747,7 +747,7 @@ Lint with `npm run lint` (ESLint, airbnb-base).
 <details>
 <summary><b>Breaking changes in 2.0.0</b> (click to expand)</summary>
 
-- **Node.js 18.17+**, ESM only. Express 5, Knex 3, multer 2, passport 0.7, jsonwebtoken 9.
+- **Node.js 20.19+**, ESM only. Express 5, Knex 3, multer 2, passport 0.7, jsonwebtoken 9.
 - **Framework packages**: `@averoa/core` ^2, `@averoa/utilities` ^2, `@averoa/routes` ^3. The one-line re-export
   packages `@averoa/models`, `@averoa/providers`, `@averoa/repositories`, `@averoa/helpers` and `@averoa/jobs` are
   deprecated and removed from the dependencies: replace their imports with the `#models`, `#providers`,

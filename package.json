@@ -5,7 +5,7 @@
   "main": "server.js",
   "type": "module",
   "engines": {
-    "node": ">=18.17"
+    "node": ">=20.19"
   },
   "imports": {
     "#models": "./app/Models/index.js",
@@ -42,7 +42,7 @@
   "dependencies": {
     "@averoa/core": "^2.0.0",
     "@averoa/routes": "^3.0.0",
-    "@averoa/utilities": "^2.0.0",
+    "@averoa/utilities": "^2.0.1",
     "dotenv": "^16.6.1",
     "edge.js": "^5.5.1",
     "express": "^5.1.0",
@@ -57,11 +57,16 @@
     "passport-local": "^1.0.0"
   },
   "devDependencies": {
-    "@faker-js/faker": "^9.9.0",
+    "@faker-js/faker": "^10.5.0",
     "better-sqlite3": "^12.4.1",
     "eslint": "^8.57.1",
     "eslint-config-airbnb-base": "^15.0.0",
     "eslint-plugin-import": "^2.32.0",
     "nodemon": "^3.1.10"
+  },
+  "overrides": {
+    "nodemon": {
+      "minimatch": "^11.0.1"
+    }
   }
 }
