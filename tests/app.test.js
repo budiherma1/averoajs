@@ -45,6 +45,9 @@ after(async () => {
   await DB?.destroy();
   const utilities = await import('@averoa/utilities');
   await utilities.closeQueue?.();
+  // the shared Redis client (SESSION_STORE / RATE_LIMIT_STORE=redis) keeps the process alive
+  const core = await import('@averoa/core');
+  await core.closeRedis?.();
 });
 
 describe('sample routes', () => {

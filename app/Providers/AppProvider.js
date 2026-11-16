@@ -27,13 +27,29 @@ class AppProvider {
   }
 
   /**
-   * [extra express-session options, merged into the defaults of @averoa/core (e.g. a store)]
+   * [extra express-session options, merged into the defaults of @averoa/core. The store comes
+   * from SESSION_STORE (memory | redis); a `store` returned here wins over it]
    *
    * @return  {[object|undefined]}
    */
   session() {
     // sample
-    // return { store: new RedisStore({ client: redisClient }) };
+    // return { name: 'app.sid', cookie: { maxAge: 24 * 60 * 60 * 1000 } };
+  }
+
+  /**
+   * [options of the global rate limiter. Receives the defaults of @averoa/core
+   * ({ path: '/api', name: 'global', windowMs, limit } from RATE_LIMIT_*).
+   * Return them (changed or not), or `false` to disable the global limiter]
+   *
+   * @param   {[object]}  defaults  [default rate limiter options]
+   *
+   * @return  {[object|false]}
+   */
+  rateLimit(defaults) {
+    // sample: don't count health checks
+    // return { ...defaults, skip: (req) => req.path === '/health' };
+    return defaults;
   }
 
   /**

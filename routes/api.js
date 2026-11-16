@@ -8,7 +8,8 @@ router.prefix('/v2', () => v2(router));
 
 // JWT auth example: POST /api/auth/login,
 // then call the routes below with "Authorization: Bearer <token>"
-router.post('/auth/login', 'AuthController@login');
+// LoginRateLimitMiddleware: 429 after repeated failed logins (LOGIN_RATE_LIMIT_*)
+router.post('/auth/login', 'AuthController@login', ['LoginRateLimitMiddleware']);
 router.middleware(['AuthMiddleware'], () => {
   router.get('/auth/me', 'AuthController@me');
   router.post('/users', 'SampleController@sampleMethodModelPost'); // returns users' emails and addresses
