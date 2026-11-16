@@ -1075,6 +1075,51 @@ assert.equal(fake.dispatched[0].job, 'SendWelcomeEmailJob');
 fake.restore();
 ```
 
+### Running workers in production
+
+Run the web server, the job worker(s), the mail worker (if you queue mail) and one scheduler as separate processes
+from the same code and the same environment. Each of them stops cleanly on `SIGTERM`; give them a stop grace period
+longer than `SHUTDOWN_TIMEOUT`, and `SHUTDOWN_TIMEOUT` longer than your slowest job.
+
+With Docker, build one image and start it with a different command per service:
+
+```yaml
+# docker-compose.yml (excerpt)
+x-app: &app
+  image: my-averoa-app
+  env_file: .env
+  restart: unless-stopped
+  stop_grace_period: 30s
+  depends_on: [rabbitmq]
+
+services:
+  web:
+    <<: *app
+    command: ["node", "server.js"]
+    ports: ["3000:3000"]
+  worker:
+    <<: *app
+    command: ["node", "workers/jobs.js"]
+    deploy:
+      replicas: 2                  # scale job workers freely
+  scheduler:
+    <<: *app
+    command: ["node", "workers/scheduler.js"]
+    deploy:
+      replicas: 1                  # never more than one
+  rabbitmq:
+    image: rabbitmq:3-management
+```
+
+Start the processes with `node` (as above) rather than `npm run`, so `SIGTERM` reaches Node directly. With a process
+manager such as PM2 or systemd, the same applies: one entry per command, `workers/scheduler.js` with a single instance.
+On Kubernetes, use a Deployment for the web server and one for the job workers, and either a one-replica Deployment
+running `node workers/scheduler.js` (with the `Recreate` strategy, so two never overlap during a rollout) or a CronJob
+running `node workers/scheduler.js --once` every minute (`concurrencyPolicy: Forbid`).
+
+Delayed jobs and backoffs live in RabbitMQ, not in the worker, so they survive a worker restart. Queues are durable and
+messages persistent; keep the RabbitMQ data on a persistent volume.
+
 ## File uploads
 
 AveroaJS offers two upload paths. Both keep files in memory while the request is parsed and write them through
@@ -1359,7 +1404,7 @@ npm test
 | File | Covers |
 | --- | --- |
 | `tests/app.test.js` | Boots the real app with `createApp()` on in-memory SQLite (`better-sqlite3`), runs the migrations and seeders, and tests the sample routes, CSRF, the JWT flow and the Teacher CRUD over HTTP, including `401` for writes without a token |
-| `tests/jobs.test.js` | `SendWelcomeEmailJob` and `PruneSoftDeletedJob` with `dispatchSync()` on SQLite, job discovery and the `app/Console/Kernel.js` schedule. With `RABBITMQ_TEST_SERVER` set (for example `amqp://guest:guest@127.0.0.1:5672`), it also starts `workers/jobs.js` and `workers/scheduler.js` against that RabbitMQ; otherwise that part is skipped |
+| `tests/jobs.test.js` | `SendWelcomeEmailJob` and `PruneSoftDeletedJob` with `dispatchSync()` on SQLite, job discovery and the `app/Console/Kernel.js` schedule. With `RABBITMQ_TEST_SERVER` set (for example `amqp://guest:guest@127.0.0.1:5672`), it also runs `workers/jobs.js`, `workers/scheduler.js` and `workers/retry-failed-jobs.js` against that RabbitMQ; otherwise that part is skipped |
 | `tests/unit.test.js` | `PasswordHelper`, `UploadProvider` path sanitising (in a temporary app root), `UploadImageMiddleware` (`req.file`, `req.dataFiles` for `upload` columns, `422` / `400` errors) and the `TOKEN_SECRET` check |
 | `tests/helpers.js` | `setTestEnv()` (sets `NODE_ENV=test`, SQLite, random secrets) and a `fetch` client with a timeout |
 
@@ -1374,6 +1419,19 @@ npm run lint:fix   # apply automatic fixes
 ```
 
 ## Upgrading from 1.x
+
+### Unreleased: jobs and scheduling
+
+Needs the next release of `@averoa/utilities` (the `Job`, `startJobWorker` and `Schedule` exports, added after 2.0.2)
+and of `@averoa/core` (`make:job` generates a `Job` subclass). Changes that affect existing applications:
+
+- **Background jobs and a scheduler.** `npm run worker:jobs`, `npm run schedule:run` and `npm run queue:retry`
+  (`workers/`), the schedule in `app/Console/Kernel.js`, and the sample jobs `SendWelcomeEmailJob` and
+  `PruneSoftDeletedJob`. See [Jobs and scheduling](#jobs-and-scheduling).
+- **`app/Jobs/ExampleJob.js` is gone.** Remove its import if your code used it.
+- **`make:job`** generates a class extending `Job` (exported as the class) instead of an instance with `sample()`.
+- **New dependency** `croner` and new env vars `JOBS_QUEUE`, `JOBS_WORKER_QUEUES`, `JOBS_CONCURRENCY`,
+  `SCHEDULE_TIMEZONE` and `MAIL_FROM` (see `.env.example`).
 
 ### What's new in 2.1.0
 
