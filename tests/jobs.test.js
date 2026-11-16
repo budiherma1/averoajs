@@ -19,6 +19,8 @@ const dbFile = path.join(tmpDir, 'jobs.sqlite');
 const amqpUrl = process.env.RABBITMQ_TEST_SERVER;
 const jobsQueue = `app-test-${randomBytes(4).toString('hex')}`;
 setTestEnv({
+  // a SQLite file shared with the worker processes, also when AVEROA_TEST_DB_URL is set
+  DB_CLIENT: 'better-sqlite3',
   DB_NAME: dbFile, JOBS_QUEUE: jobsQueue, ...(amqpUrl ? { RABBITMQ_SERVER: amqpUrl } : {}),
 });
 

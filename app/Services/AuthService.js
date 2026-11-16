@@ -106,7 +106,8 @@ class AuthService {
       if (row.revoked_reason === 'rotated') await this.reuseDetected(row);
       return fail(401, INVALID_REFRESH);
     }
-    if (new Date(row.expires_at).getTime() <= Date.now()) return fail(401, INVALID_REFRESH);
+    const expiresAt = TokenHelper.fromDb(row.expires_at);
+    if (expiresAt.getTime() <= Date.now()) return fail(401, INVALID_REFRESH);
 
     const user = await UserRepository.findActiveById(row.user_id);
     if (!user) {

@@ -2072,9 +2072,10 @@ SESSION_STORE=redis REDIS_URL=redis://127.0.0.1:6379 \
 ```
 
 
-To run `tests/app.test.js` against MySQL or PostgreSQL instead of in-memory SQLite, set `AVEROA_TEST_DB_URL`
-(PostgreSQL also needs `npm install --no-save pg`). The suite rolls back every migration first, so use a throwaway
-database:
+To run the suite against MySQL or PostgreSQL instead of in-memory SQLite, set `AVEROA_TEST_DB_URL` (PostgreSQL also
+needs `npm install --no-save pg`). Every test file rolls back the migrations first, so use a throwaway database; with
+`AVEROA_TEST_DB_URL` set, `npm test` runs the files one at a time because they share it (`tests/jobs.test.js` keeps
+its own SQLite file):
 
 ```bash
 AVEROA_TEST_DB_URL=mysql://user:pass@127.0.0.1:3306/averoa_test npm test

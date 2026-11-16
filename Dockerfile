@@ -32,6 +32,9 @@ CMD ["npm", "run", "dev"]
 # ---- production ---------------------------------------------------------------
 FROM base AS production
 ENV NODE_ENV=production
+# JSON lines on stdout for the platform's log collector; nothing written to the container filesystem
+ENV LOG_CHANNEL=stdout \
+    LOG_FORMAT=json
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # application files stay read-only for the runtime user; only storages/ is writable

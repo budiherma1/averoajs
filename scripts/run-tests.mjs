@@ -28,6 +28,12 @@ if (files.length === 0) {
     .map((name) => path.join('tests', name));
 }
 
+// one shared MySQL / PostgreSQL database (AVEROA_TEST_DB_URL): one file at a time, since every
+// file migrates and seeds it; in-memory SQLite gives each file its own database
+if (process.env.AVEROA_TEST_DB_URL && !options.some((o) => o.startsWith('--test-concurrency'))) {
+  options.push('--test-concurrency=1');
+}
+
 const child = spawn(process.execPath, ['--test', ...options, ...files], { cwd: root, stdio: 'inherit' });
 child.on('exit', (code, signal) => {
   if (signal) process.kill(process.pid, signal);

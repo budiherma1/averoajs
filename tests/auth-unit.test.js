@@ -14,6 +14,17 @@ before(async () => {
 });
 
 describe('TokenHelper', () => {
+  test('fromDb reads zone-less MySQL strings in the DB_TIMEZONE zone, not the process zone', () => {
+    const expected = Date.parse('2026-11-16T13:14:38Z');
+    assert.equal(TokenHelper.fromDb('2026-11-16 13:14:38', undefined).getTime(), expected);
+    assert.equal(TokenHelper.fromDb('2026-11-16 13:14:38', 'Z').getTime(), expected);
+    assert.equal(TokenHelper.fromDb('2026-11-16 20:14:38', '+07:00').getTime(), expected);
+    assert.equal(TokenHelper.fromDb('2026-11-16T13:14:38.000Z', '+07:00').getTime(), expected);
+    assert.equal(TokenHelper.fromDb(new Date(expected)).getTime(), expected);
+    assert.equal(TokenHelper.fromDb(expected).getTime(), expected);
+    assert.equal(TokenHelper.fromDb(null), null);
+  });
+
   test('random tokens are URL-safe and unique', () => {
     const a = TokenHelper.random();
     assert.match(a, /^[A-Za-z0-9_-]{43}$/);

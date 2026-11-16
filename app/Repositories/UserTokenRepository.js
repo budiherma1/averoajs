@@ -33,7 +33,7 @@ class UserTokenRepository {
   /** Creation time of the newest token of this type, or null. */
   async latestCreatedAt(userId, type, db = DB) {
     const row = await db(TABLE).where({ user_id: userId, type }).orderBy('created_at', 'desc').first('created_at');
-    return row ? new Date(row.created_at) : null;
+    return row ? TokenHelper.fromDb(row.created_at) : null;
   }
 
   /** The unused, unexpired row of a plain token, or undefined. */
