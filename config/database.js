@@ -8,6 +8,12 @@ import { fileURLToPath } from 'node:url';
  *   sqlite clients use DB_NAME as the file name (default ':memory:'); a relative
  *   name is resolved against the application root, so the app and the knex CLI
  *   open the same file.
+ * DB_TIMEZONE (mysql2 only): Z (default, UTC) | an offset such as +07:00 | local
+ *   Sets both the driver's `timezone` (JS Dates written by the app) and the
+ *   session `time_zone` (CURRENT_TIMESTAMP, TIMESTAMP columns), so created_at
+ *   filled by MySQL and deleted_at written by Crud use the same zone. `local`
+ *   keeps the old behaviour (Node.js time zone for the driver, server default
+ *   for the session), which mixes zones when the two differ.
  */
 
 const appRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -22,6 +28,14 @@ const stubs = {
   migrations: { stub: stub('migration.stub') },
   seeds: { stub: stub('seed.stub') },
 };
+
+function mysqlTimezone(value) {
+  const tz = String(value ?? '').trim();
+  if (!tz || tz === 'Z' || tz.toUpperCase() === 'UTC') return { driver: 'Z', session: '+00:00' };
+  if (tz.toLowerCase() === 'local') return null;
+  if (/^[+-](0\d|1[0-4]):[0-5]\d$/.test(tz)) return { driver: tz, session: tz };
+  throw new Error(`DB_TIMEZONE must be Z, UTC, local or an offset such as +07:00 (got "${tz}")`);
+}
 
 export default (proc = process) => {
   const { env } = proc;
@@ -45,7 +59,17 @@ export default (proc = process) => {
     password: env.DB_PASS,
     database: env.DB_NAME,
   };
-  if (client === 'mysql2') connection.dateStrings = true;
+  const config = { client, connection, ...stubs };
+  if (client === 'mysql2') {
+    connection.dateStrings = true;
+    const tz = mysqlTimezone(env.DB_TIMEZONE);
+    if (tz) {
+      connection.timezone = tz.driver;
+      config.pool = {
+        afterCreate: (conn, done) => conn.query('SET time_zone = ?', [tz.session], (err) => done(err, conn)),
+      };
+    }
+  }
 
-  return { client, connection, ...stubs };
+  return config;
 };

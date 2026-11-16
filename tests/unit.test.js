@@ -13,7 +13,8 @@ import { APP_ROOT, setTestEnv } from './helpers.js';
 const tmpRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'averoa-app-unit-')));
 fs.cpSync(path.join(APP_ROOT, 'config'), path.join(tmpRoot, 'config'), { recursive: true });
 fs.writeFileSync(path.join(tmpRoot, 'package.json'), '{ "type": "module" }');
-setTestEnv({ AVEROA_ROOT: tmpRoot });
+// always in-memory SQLite here, even when AVEROA_TEST_DB_URL points app.test.js at a server
+setTestEnv({ AVEROA_ROOT: tmpRoot, DB_CLIENT: 'better-sqlite3', DB_NAME: ':memory:' });
 
 let PasswordHelper;
 let UploadProvider;
