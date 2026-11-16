@@ -740,7 +740,7 @@ npm run link:local     # packs ../dependencies/*; re-run after every `npm instal
 npm test
 ```
 
-Lint with `npm run lint` (ESLint, airbnb-base).
+Lint with `npm run lint` (ESLint 10 flat config in `eslint.config.js`; `npm run lint:fix` auto-fixes formatting).
 
 ## 🆙 Upgrading from 1.x
 

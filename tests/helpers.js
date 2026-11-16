@@ -38,7 +38,9 @@ export function client(baseUrl, timeoutMs = 5000) {
     try {
       res = await fetch(baseUrl + url, init);
     } catch (err) {
-      if (err.name === 'TimeoutError') throw new Error(`${method} ${url} did not respond within ${timeoutMs}ms (handler hangs)`);
+      if (err.name === 'TimeoutError') {
+        throw new Error(`${method} ${url} did not respond within ${timeoutMs}ms (handler hangs)`, { cause: err });
+      }
       throw err;
     }
     const text = await res.text();
