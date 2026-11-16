@@ -1,8 +1,10 @@
 import { Crud } from '@averoa/utilities';
 
-// Crud.* answer { status: false, message } on failure; turn that into a 4xx
+// Crud.* resolve { status: false, message, statusCode } on failure: 400 invalid
+// filter, 404 unknown or soft-deleted id, 422 validation, 500 database error.
+// Success results have no statusCode and get okStatus (a failure without one, 400).
 const send = (res, result, okStatus = 200) => res
-  .status(result?.status === false ? 400 : okStatus)
+  .status(result?.statusCode ?? (result?.status === false ? 400 : okStatus))
   .json(result);
 
 class TeacherController {

@@ -1,4 +1,7 @@
-// import UploadImagesMiddleware from "../Middleware/UploadImagesMiddleware.js";
+// Global middleware, run on every route declared with @averoa/routes. Entries are
+// middleware names (files in app/Middleware, e.g. 'AuthMiddleware'), functions, or
+// objects with a handle(req, res, next) method. Don't add UploadImageMiddleware here:
+// it would parse multipart bodies before postForm/putForm/patchForm routes can.
 class MiddlewareProvider {
   /**
    * [Global middleware for all routes placed in the beginning before another middleware]
@@ -8,8 +11,8 @@ class MiddlewareProvider {
   beginning() {
     // sample
     // return [
-    // UploadImagesMiddleware,
-    // ]
+    //   (req, res, next) => { res.set('X-Request-Start', String(Date.now())); next(); },
+    // ];
   }
 
   /**
@@ -20,8 +23,8 @@ class MiddlewareProvider {
   end() {
     // sample
     // return [
-    // UploadImagesMiddleware,
-    // ]
+    //   'SomeMiddleware', // app/Middleware/SomeMiddleware.js
+    // ];
   }
 }
 

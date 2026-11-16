@@ -5,6 +5,7 @@ import {
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
+import { once } from 'node:events';
 import path from 'node:path';
 import { APP_ROOT, setTestEnv } from './helpers.js';
 
@@ -79,5 +80,89 @@ describe('JwtStrategy', () => {
     } finally {
       process.env.TOKEN_SECRET = saved;
     }
+  });
+});
+
+describe('UploadImageMiddleware', () => {
+  const PNG = Buffer.from('89504e470d0a1a0a', 'hex');
+  let server;
+  let baseUrl;
+
+  before(async () => {
+    const { default: express } = await import('express');
+    const { Model } = await import('@averoa/utilities');
+    const { default: uploadImage } = await import('#app/Middleware/UploadImageMiddleware.js');
+
+    // a crud model with an upload column named like the middleware's field
+    class Photo extends Model {
+      static tableName = 'photo';
+
+      static column = {
+        id: { flag: { required: false } },
+        title: { flag: { required: false } },
+        image: { flag: { required: true, upload: true } },
+      };
+    }
+
+    const app = express();
+    app.post(
+      '/',
+      (req, res, next) => uploadImage.handle(req, res, next),
+      (req, res, next) => Photo.validationRouter(req, res, next, { type: 'json', create: true }),
+      (req, res) => res.json({
+        file: req.file?.originalname,
+        files: req.files?.map((f) => f.fieldname),
+        dataFiles: Object.keys(req.dataFiles ?? {}),
+        size: req.dataFiles?.image?.buffer?.length,
+        body: req.body,
+      }),
+    );
+    app.use((err, req, res, next) => res.status(err.status ?? 500).json({ message: err.message }));
+    server = app.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    baseUrl = `http://127.0.0.1:${server.address().port}/`;
+  });
+
+  after(() => new Promise((resolve) => { server?.close(resolve); }));
+
+  const post = async (form, headers) => {
+    const res = await fetch(baseUrl, { method: 'POST', body: form, headers });
+    return { status: res.status, body: await res.json() };
+  };
+
+  test('keeps req.file and feeds the upload column of crud routes (req.dataFiles)', async () => {
+    const form = new FormData();
+    form.append('title', 'Holiday');
+    form.append('image', new Blob([PNG], { type: 'image/png' }), 'photo.png');
+    const res = await post(form);
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.file, 'photo.png');
+    assert.deepEqual(res.body.files, ['image']);
+    assert.deepEqual(res.body.dataFiles, ['image']);
+    assert.equal(res.body.size, PNG.length);
+    assert.deepEqual(res.body.body, { title: 'Holiday' });
+  });
+
+  test('a required upload column without a file answers 422', async () => {
+    const form = new FormData();
+    form.append('title', 'No file');
+    const res = await post(form);
+    assert.equal(res.status, 422);
+    assert.equal(res.body.data.column, 'image');
+  });
+
+  test('rejects other file types with 422', async () => {
+    const form = new FormData();
+    form.append('image', new Blob(['<script>'], { type: 'text/html' }), 'x.html');
+    const res = await post(form);
+    assert.equal(res.status, 422);
+    assert.equal(res.body.data.column, 'image');
+  });
+
+  test('a malformed multipart body is a 400, not a 500', async () => {
+    const res = await post('--x\r\nContent-Disposition: form-data; name="image"; filename="a.png"\r\n', {
+      'content-type': 'multipart/form-data; boundary=x',
+    });
+    assert.equal(res.status, 400, JSON.stringify(res.body));
   });
 });

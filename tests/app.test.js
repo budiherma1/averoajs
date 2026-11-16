@@ -16,6 +16,13 @@ let server;
 let DB;
 let http;
 
+/** POST /api/auth/login as the seeded demo user; returns the JWT. */
+async function loginToken() {
+  const res = await http('POST', '/api/auth/login', { body: DEMO });
+  assert.equal(res.status, 200, res.text);
+  return res.body.data.token;
+}
+
 before(async () => {
   const { createApp } = await import('@averoa/core');
   ({ DB } = await import('@averoa/utilities'));
@@ -57,8 +64,16 @@ describe('sample routes', () => {
     const web = await http('POST', '/teacher', { body: {} });
     assert.equal(web.status, 403, web.text);
 
-    const api = await http('POST', '/api/users', { body: {} });
+    const api = await http('POST', '/api/auth/login', { body: {} });
     assert.notEqual(api.status, 403, api.text);
+    assert.equal(api.status, 422, api.text);
+  });
+
+  test('GET /users renders first names only, no emails or addresses', async () => {
+    const res = await http('GET', '/users');
+    assert.equal(res.status, 200, res.text);
+    assert.match(res.text, /<li>Demo<\/li>/);
+    assert.doesNotMatch(res.text, /@/);
   });
 
   test('GET /api/v2/teachers lists seeded teachers', async () => {
@@ -68,12 +83,20 @@ describe('sample routes', () => {
     assert.ok(res.body.data.length > 0);
   });
 
+  test('POST /api/users needs a JWT', async () => {
+    const res = await http('POST', '/api/users', { body: { first_name: 'A', email: 'a@example.com', password: 'password' } });
+    assert.equal(res.status, 401, res.text);
+    assert.equal(res.body.status, false);
+    assert.equal(res.body.data, undefined, 'no user data without a token');
+  });
+
   test('POST /api/users validates the body and never returns password hashes', async () => {
-    const invalid = await http('POST', '/api/users', { body: { first_name: 'A', email: 'not-an-email', password: 'password' } });
+    const token = await loginToken();
+    const invalid = await http('POST', '/api/users', { token, body: { first_name: 'A', email: 'not-an-email', password: 'password' } });
     assert.equal(invalid.status, 422, invalid.text);
     assert.equal(invalid.body.data.column, 'email');
 
-    const ok = await http('POST', '/api/users', { body: { first_name: 'A', email: 'a@example.com', password: 'password' } });
+    const ok = await http('POST', '/api/users', { token, body: { first_name: 'A', email: 'a@example.com', password: 'password' } });
     assert.equal(ok.status, 200, ok.text);
     assert.ok(ok.body.data.length > 0);
     for (const user of ok.body.data) {
@@ -129,25 +152,64 @@ describe('JWT auth', () => {
 
 describe('Teacher CRUD', () => {
   let id;
+  let token;
+
+  before(async () => {
+    token = await loginToken();
+  });
+
+  test('writes without a JWT answer 401 and change nothing', async () => {
+    const [{ count: countBefore }] = await DB('teacher').count({ count: '*' });
+    const body = { teacher_name: 'Mallory', type: 1 };
+
+    const create = await http('POST', '/api/teachers', { body });
+    assert.equal(create.status, 401, create.text);
+    const [{ count: countAfter }] = await DB('teacher').count({ count: '*' });
+    assert.equal(Number(countAfter), Number(countBefore), 'nothing inserted');
+
+    const existing = await DB('teacher').whereNull('deleted_at').first();
+    const update = await http('PUT', `/api/teachers/${existing.id}`, { body });
+    assert.equal(update.status, 401, update.text);
+    const forged = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MX0.c2lnbmF0dXJlLWZyb20tYW5vdGhlci1zZWNyZXQ';
+    const remove = await http('DELETE', `/api/teachers/${existing.id}`, { token: forged });
+    assert.equal(remove.status, 401, remove.text);
+
+    const row = await DB('teacher').where('id', existing.id).first();
+    assert.equal(row.teacher_name, existing.teacher_name, 'not updated');
+    assert.equal(row.deleted_at, null, 'not deleted');
+  });
+
+  test('reads stay public', async () => {
+    const res = await http('GET', '/api/teachers?limit=1');
+    assert.equal(res.status, 200, res.text);
+    assert.equal(res.body.status, true);
+  });
+
+  test('invalid filters answer 400', async () => {
+    const res = await http('GET', `/api/teachers?${new URLSearchParams({ 'teacher_name:nope': 'x' })}`);
+    assert.equal(res.status, 400, res.text);
+    assert.equal(res.body.status, false);
+  });
 
   test('create validates input with 422', async () => {
-    const missing = await http('POST', '/api/teachers', { body: { type: 1 } });
+    const missing = await http('POST', '/api/teachers', { token, body: { type: 1 } });
     assert.equal(missing.status, 422, missing.text);
     assert.equal(missing.body.status, false);
     assert.equal(missing.body.data.column, 'teacher_name');
 
-    const badType = await http('POST', '/api/teachers', { body: { teacher_name: 'Ada', type: 'abc' } });
+    const badType = await http('POST', '/api/teachers', { token, body: { teacher_name: 'Ada', type: 'abc' } });
     assert.equal(badType.status, 422, badType.text);
     assert.equal(badType.body.data.column, 'type');
   });
 
   test('create', async () => {
     const res = await http('POST', '/api/teachers', {
+      token,
       body: {
         teacher_name: 'Ada Lovelace', type: 2, address: 'London', saldo: 150000, teacher_class: '7',
       },
     });
-    assert.ok([200, 201].includes(res.status), res.text);
+    assert.equal(res.status, 201, res.text);
     assert.equal(res.body.status, true);
     id = res.body.data.id;
     assert.ok(id);
@@ -175,7 +237,7 @@ describe('Teacher CRUD', () => {
   });
 
   test('update', async () => {
-    const res = await http('PUT', `/api/teachers/${id}`, { body: { teacher_name: 'Ada King' } });
+    const res = await http('PUT', `/api/teachers/${id}`, { token, body: { teacher_name: 'Ada King' } });
     assert.equal(res.status, 200, res.text);
     assert.equal(res.body.status, true);
 
@@ -185,13 +247,13 @@ describe('Teacher CRUD', () => {
   });
 
   test('update validates input with 422', async () => {
-    const res = await http('PUT', `/api/teachers/${id}`, { body: { type: 9 } });
+    const res = await http('PUT', `/api/teachers/${id}`, { token, body: { type: 9 } });
     assert.equal(res.status, 422, res.text);
     assert.equal(res.body.data.column, 'type');
   });
 
   test('delete is a soft delete and hides the row', async () => {
-    const res = await http('DELETE', `/api/teachers/${id}`);
+    const res = await http('DELETE', `/api/teachers/${id}`, { token });
     assert.equal(res.status, 200, res.text);
     assert.equal(res.body.status, true);
 
@@ -209,5 +271,8 @@ describe('Teacher CRUD', () => {
 
     const get = await http('GET', `/api/teachers/${id}`);
     assert.equal(get.status, 404, get.text);
+
+    const again = await http('DELETE', `/api/teachers/${id}`, { token });
+    assert.equal(again.status, 404, again.text);
   });
 });

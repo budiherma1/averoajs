@@ -7,7 +7,7 @@ class SampleController {
   async sampleMethod(req, res) {
     res.json({
       name: 'Averoa',
-      version: '2.0.0',
+      version: '2.1.0',
     });
   }
 
@@ -15,11 +15,13 @@ class SampleController {
     res.render('welcome', { name: 'Averoa' });
   }
 
+  // public page: only first names reach the view, never emails or addresses
   async sampleMethodModel(req, res) {
-    const users = await Users.query();
+    const users = await Users.query().select('id', 'first_name');
     res.render('users', { data: users });
   }
 
+  // behind AuthMiddleware (routes/api.js): the list holds every user's email and address
   async sampleMethodModelPost(req, res) {
     const validation = Users.validation(req.body ?? {});
     if (validation?.status === false) return res.status(422).json(validation);
