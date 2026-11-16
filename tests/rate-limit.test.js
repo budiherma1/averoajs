@@ -5,9 +5,8 @@ import {
   describe, test, before, after,
 } from 'node:test';
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
-import path from 'node:path';
-import { APP_ROOT, setTestEnv, client } from './helpers.js';
+import { testApp } from '@averoa/core/testing.js';
+import { setTestEnv } from './helpers.js';
 
 setTestEnv({
   TRUST_PROXY: '1',
@@ -18,37 +17,19 @@ setTestEnv({
 
 const DEMO = { email: 'demo@averoa.test', password: 'password' };
 
-let server;
-let DB;
+let app;
 let http;
 
 before(async () => {
-  const { createApp } = await import('@averoa/core');
-  ({ DB } = await import('@averoa/utilities'));
-  const { app } = await createApp();
-  await DB.migrate.latest({ directory: path.join(APP_ROOT, 'database/migrations'), loadExtensions: ['.js'] });
-  await DB.seed.run({ directory: path.join(APP_ROOT, 'database/seeds'), loadExtensions: ['.js'] });
-  server = app.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  http = client(`http://127.0.0.1:${server.address().port}`);
+  app = await testApp();
+  ({ http } = app);
 });
 
-after(async () => {
-  if (server) {
-    server.closeAllConnections?.();
-    await new Promise((resolve) => { server.close(resolve); });
-  }
-  await DB?.destroy();
-  const utilities = await import('@averoa/utilities');
-  await utilities.closeQueue?.();
-  // the shared Redis client (SESSION_STORE / RATE_LIMIT_STORE=redis) keeps the process alive
-  const core = await import('@averoa/core');
-  await core.closeRedis?.();
-});
+after(() => app?.close());
 
 /** POST /api/auth/login from client `ip`; returns { status, body, headers }. */
 async function login(ip, credentials) {
-  const res = await fetch(`http://127.0.0.1:${server.address().port}/api/auth/login`, {
+  const res = await fetch(`${app.url}/api/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-forwarded-for': ip },
     body: JSON.stringify(credentials),
@@ -119,14 +100,14 @@ describe('login brute-force protection', () => {
 
 describe('global API limiter', () => {
   test('API responses carry the standard RateLimit headers', async () => {
-    const res = await fetch(`http://127.0.0.1:${server.address().port}/api`, { headers: { 'x-forwarded-for': '198.51.100.7' } });
+    const res = await fetch(`${app.url}/api`, { headers: { 'x-forwarded-for': '198.51.100.7' } });
     assert.equal(res.status, 200);
     assert.match(res.headers.get('ratelimit-policy'), /q=100; w=60/);
     assert.match(res.headers.get('ratelimit'), /r=99/);
   });
 
   test('web pages are not limited by the API limiter', async () => {
-    const res = await fetch(`http://127.0.0.1:${server.address().port}/`);
+    const res = await fetch(`${app.url}/`);
     assert.equal(res.status, 200);
     assert.equal(res.headers.get('ratelimit'), null);
     assert.equal((await http('GET', '/')).status, 200);

@@ -1,35 +1,24 @@
 // Observability on the real app: health probes, request ids, requestId in errors.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
+import { testApp } from '@averoa/core/testing.js';
 import { setTestEnv } from './helpers.js';
 
 setTestEnv({ TRUST_REQUEST_ID: 'true', LOG_CHANNEL: 'stdout' });
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-let server;
+let app;
 let base;
-let DB;
 let health;
 
+// no migrations: these routes need only the database connection
 before(async () => {
-  const { createApp } = await import('@averoa/core');
-  ({ DB } = await import('@averoa/utilities'));
-  let app;
-  ({ app, health } = await createApp());
-  server = app.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  base = `http://127.0.0.1:${server.address().port}`;
+  app = await testApp({ migrate: false, seed: false });
+  ({ health, url: base } = app);
 });
 
-after(async () => {
-  if (server) {
-    server.closeAllConnections?.();
-    await new Promise((resolve) => { server.close(resolve); });
-  }
-  await DB?.destroy();
-});
+after(() => app?.close());
 
 const get = (path, headers = {}) => fetch(base + path, {
   headers, signal: AbortSignal.timeout(5000),

@@ -1,21 +1,18 @@
-// Integration tests: the real app (routes, controllers, models, migrations, seeds)
-// on top of @averoa/core's createApp(), with an in-memory better-sqlite3 database
-// (or MySQL / PostgreSQL through AVEROA_TEST_DB_URL, see tests/helpers.js).
+// Integration tests: the real app (routes, controllers, models, migrations, seeds),
+// started by testApp() from @averoa/core/testing, with an in-memory better-sqlite3
+// database (or MySQL / PostgreSQL through AVEROA_TEST_DB_URL, see tests/helpers.js).
 import {
   describe, test, before, after,
 } from 'node:test';
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
-import path from 'node:path';
-import {
-  APP_ROOT, setTestEnv, client, usesTestDatabaseUrl,
-} from './helpers.js';
+import { testApp } from '@averoa/core/testing.js';
+import { setTestEnv } from './helpers.js';
 
 setTestEnv();
 
 const DEMO = { email: 'demo@averoa.test', password: 'password' };
 
-let server;
+let app;
 let DB;
 let http;
 
@@ -26,35 +23,13 @@ async function loginToken() {
   return res.body.data.token;
 }
 
+// migrated and seeded; a real server (AVEROA_TEST_DB_URL) is rolled back first
 before(async () => {
-  const { createApp } = await import('@averoa/core');
-  ({ DB } = await import('@averoa/utilities'));
-
-  const { app } = await createApp();
-
-  const migrations = { directory: path.join(APP_ROOT, 'database/migrations'), loadExtensions: ['.js'] };
-  // a real server (AVEROA_TEST_DB_URL) may hold tables from an earlier run
-  if (usesTestDatabaseUrl()) await DB.migrate.rollback(migrations, true);
-  await DB.migrate.latest(migrations);
-  await DB.seed.run({ directory: path.join(APP_ROOT, 'database/seeds'), loadExtensions: ['.js'] });
-
-  server = app.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  http = client(`http://127.0.0.1:${server.address().port}`);
+  app = await testApp();
+  ({ DB, http } = app);
 });
 
-after(async () => {
-  if (server) {
-    server.closeAllConnections?.();
-    await new Promise((resolve) => { server.close(resolve); });
-  }
-  await DB?.destroy();
-  const utilities = await import('@averoa/utilities');
-  await utilities.closeQueue?.();
-  // the shared Redis client (SESSION_STORE / RATE_LIMIT_STORE=redis) keeps the process alive
-  const core = await import('@averoa/core');
-  await core.closeRedis?.();
-});
+after(() => app?.close());
 
 describe('sample routes', () => {
   test('GET /api answers JSON', async () => {

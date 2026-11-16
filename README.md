@@ -2051,17 +2051,49 @@ npm test
 
 | File | Covers |
 | --- | --- |
-| `tests/app.test.js` | Boots the real app with `createApp()` on in-memory SQLite (`better-sqlite3`), runs the migrations and seeders, and tests the sample routes, CSRF, the JWT flow and the Teacher CRUD over HTTP, including `401` for writes without a token |
+| `tests/app.test.js` | Boots the real app with `testApp()` on in-memory SQLite (`better-sqlite3`), runs the migrations and seeders, and tests the sample routes, CSRF, the JWT flow and the Teacher CRUD over HTTP, including `401` for writes without a token |
 | `tests/openapi.test.js` | `/api/openapi.json` lists the Teacher CRUD (model schema, filters, bearer auth on writes) and the auth endpoints, hidden columns stay out of the schemas, and `validate()` rejects bad login bodies with `422` |
 | `tests/rate-limit.test.js` | The login limiter (`429` after 5 failures per IP and email, separate counters per account and IP, case-insensitive emails, successes not counted, the per-IP limit) and the global `/api` limiter headers |
 | `tests/observability.test.js` | `/health` and `/ready` on the real app, the `X-Request-Id` header, `requestId` in error responses, and the `AppProvider.health()` hook |
 | `tests/jobs.test.js` | `SendWelcomeEmailJob` and `PruneSoftDeletedJob` with `dispatchSync()` on SQLite, job discovery and the `app/Console/Kernel.js` schedule. With `RABBITMQ_TEST_SERVER` set (for example `amqp://guest:guest@127.0.0.1:5672`), it also runs `workers/jobs.js`, `workers/scheduler.js` and `workers/retry-failed-jobs.js` against that RabbitMQ; otherwise that part is skipped |
-| `tests/auth.test.js` | Registration, login, refresh token rotation and reuse detection, logout, password reset, email verification, rate limits and the `TeacherPolicy` authorization over HTTP, with mail captured by a nodemailer JSON transport |
+| `tests/auth.test.js` | Registration, login, refresh token rotation and reuse detection, logout, password reset, email verification, rate limits and the `TeacherPolicy` authorization over HTTP, with mail recorded by `fakeMail()` |
 | `tests/auth-unit.test.js` | `TokenHelper` and `EnsureEmailVerified` |
 | `tests/unit.test.js` | `PasswordHelper`, `UploadProvider` path sanitising (in a temporary app root), `UploadImageMiddleware` (`req.file`, `req.dataFiles` for `upload` columns, `422` / `400` errors) and the `TOKEN_SECRET` check |
 | `tests/upload-s3.test.js` | `UPLOAD_DRIVER` selection and the `s3` driver against a mocked SDK: keys, client settings, `Content-Type` / `Content-Disposition`, replacing and removing objects, `url()`, configuration errors and the missing-SDK error |
 | `tests/upload-s3-minio.test.js` | The `s3` driver against a real MinIO server. Skipped unless `S3_TEST_ENDPOINT` is set (see below) |
-| `tests/helpers.js` | `setTestEnv()` (sets `NODE_ENV=test`, the test database, random secrets) and a `fetch` client with a timeout |
+| `tests/helpers.js` | `setTestEnv()`: sets `NODE_ENV=test`, the test database and random secrets |
+
+### Writing an HTTP test
+
+`node averoa make:test posts --http` writes the starting point. `testApp()` from `@averoa/core/testing.js` builds the
+app, migrates and seeds the test database and listens on a random port. `app.http()` sends requests and resolves
+`{ status, headers, body, text }`, and `fakeMail()` records mail instead of sending it:
+
+```js
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { testApp, fakeMail } from '@averoa/core/testing.js';
+import { setTestEnv } from './helpers.js';
+
+setTestEnv(); // before the app is built
+
+let app;
+before(async () => { app = await testApp(); });
+after(() => app?.close());
+
+test('login answers a token pair', async () => {
+  const res = await app.http('POST', '/api/auth/login', { body: { email: 'demo@averoa.test', password: 'password' } });
+  assert.equal(res.status, 200, res.text);
+  const me = await app.http('GET', '/api/auth/me', { token: res.body.data.token });
+  assert.equal(me.body.data.email, 'demo@averoa.test');
+});
+```
+
+`app.DB` is the knex instance, for checking rows. On MySQL or PostgreSQL (`AVEROA_TEST_DB_URL`) `testApp()` rolls
+every migration back before migrating, and it refuses to do that unless `NODE_ENV=test`. Jobs: `fakeJobs()` (see
+[Testing jobs](#testing-jobs)). The full API is in the `@averoa/core` README under "Testing".
+
+### Running the tests
 
 `npm test` runs `scripts/run-tests.mjs`, which passes every `tests/*.test.js` file to `node --test`. The script lists
 the files itself because Windows shells and Node.js 20 do not expand the pattern, so `npm test` works the same on

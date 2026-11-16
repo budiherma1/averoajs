@@ -1,43 +1,28 @@
 // OpenAPI document and request validation of the boilerplate's API routes.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
-import { APP_ROOT, setTestEnv, client } from './helpers.js';
+import { testApp } from '@averoa/core/testing.js';
+import { APP_ROOT, setTestEnv } from './helpers.js';
 
 setTestEnv();
 delete process.env.OPENAPI_ENABLED;
 delete process.env.OPENAPI_UI;
 
-let server;
-let DB;
+let app;
 let http;
 let doc;
 
 before(async () => {
-  const { createApp } = await import('@averoa/core');
-  ({ DB } = await import('@averoa/utilities'));
-  const { app } = await createApp();
-  await DB.migrate.latest({ directory: path.join(APP_ROOT, 'database/migrations'), loadExtensions: ['.js'] });
-  await DB.seed.run({ directory: path.join(APP_ROOT, 'database/seeds'), loadExtensions: ['.js'] });
-  server = app.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  http = client(`http://127.0.0.1:${server.address().port}`);
+  app = await testApp();
+  ({ http } = app);
   const res = await http('GET', '/api/openapi.json');
   assert.equal(res.status, 200, res.text);
   doc = res.body;
 });
 
-after(async () => {
-  if (server) {
-    server.closeAllConnections?.();
-    await new Promise((resolve) => { server.close(resolve); });
-  }
-  await DB?.destroy();
-  const utilities = await import('@averoa/utilities');
-  await utilities.closeQueue?.();
-});
+after(() => app?.close());
 
 test('GET /api/openapi.json describes the app (AppProvider.openapi sets the title)', () => {
   assert.equal(doc.openapi, '3.1.0');

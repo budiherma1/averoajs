@@ -1,6 +1,6 @@
 {
   "name": "averoajs",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "'laravel like' boiler plate for express",
   "main": "server.js",
   "type": "module",
@@ -45,7 +45,7 @@
     "url": "git+https://github.com/budiherma1/averoajs.git"
   },
   "dependencies": {
-    "@averoa/core": "^2.2.0",
+    "@averoa/core": "^2.3.1",
     "@averoa/routes": "^3.1.0",
     "@averoa/utilities": "^2.1.1",
     "croner": "^10.0.1",

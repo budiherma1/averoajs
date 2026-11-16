@@ -1,16 +1,14 @@
 // Integration tests of the authentication flows (registration, refresh tokens,
 // logout, password reset, email verification) and of the Gate/TeacherPolicy
 // authorization, on the real app with an in-memory better-sqlite3 database.
-// Mail goes to a nodemailer JSON transport: nothing is ever sent.
+// Mail is recorded by fakeMail() from @averoa/core/testing: nothing is ever sent.
 import {
   describe, test, before, after, beforeEach,
 } from 'node:test';
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
-import path from 'node:path';
 import jwt from 'jsonwebtoken';
-import { createTransport } from 'nodemailer';
-import { APP_ROOT, setTestEnv, client } from './helpers.js';
+import { testApp, fakeMail } from '@averoa/core/testing.js';
+import { setTestEnv } from './helpers.js';
 
 // high limits: the suite sends many requests from one IP ('rate limits' lowers them)
 setTestEnv({ FRONTEND_URL: 'https://app.example.test/', AUTH_RATE_LIMIT_MAX: '1000', AUTH_RATE_LIMIT_FAILED_MAX: '1000', RATE_LIMIT_ENABLED: 'false' });
@@ -18,7 +16,7 @@ setTestEnv({ FRONTEND_URL: 'https://app.example.test/', AUTH_RATE_LIMIT_MAX: '10
 const DEMO = { email: 'demo@averoa.test', password: 'password' }; // admin
 const MEMBER = { email: 'member@averoa.test', password: 'password' }; // not an admin
 
-let server;
+let app;
 let DB;
 let http;
 let AuthService;
@@ -26,7 +24,7 @@ let Gate;
 let Users;
 let Teacher;
 let AuthRateLimit;
-const outbox = [];
+let mailer; // fakeMail(): mailer.sent holds every recorded message
 
 /**
  * Waits for the mails sent after the response (AuthService.defer) and returns
@@ -34,7 +32,9 @@ const outbox = [];
  */
 async function newMail(since, to) {
   await AuthService.settled();
-  return outbox.slice(since).filter((mail) => to === undefined || mail.to[0].address === to);
+  if (to === undefined) return mailer.sent.slice(since);
+  const mine = new Set(mailer.to(to));
+  return mailer.sent.slice(since).filter((mail) => mine.has(mail));
 }
 
 const tokenFromMail = (mail) => {
@@ -56,7 +56,7 @@ const uniqueEmail = (prefix) => `${prefix}${Date.now().toString(36)}${(counter +
 async function register(prefix = 'user') {
   const email = uniqueEmail(prefix);
   const password = 'correct horse battery';
-  const sent = outbox.length;
+  const sent = mailer.sent.length;
   const res = await http('POST', '/api/auth/register', { body: { first_name: 'Test', email, password } });
   assert.equal(res.status, 201, res.text);
   const [mail] = await newMail(sent, email);
@@ -66,41 +66,21 @@ async function register(prefix = 'user') {
 }
 
 before(async () => {
-  const { createApp } = await import('@averoa/core');
   const utilities = await import('@averoa/utilities');
   ({ DB, Gate } = utilities);
   ({ Users, Teacher } = await import('#models'));
   ({ default: AuthService } = await import('#app/Services/AuthService.js'));
   ({ default: AuthRateLimit } = await import('#app/Middleware/AuthRateLimitMiddleware.js'));
 
-  const transport = createTransport({ jsonTransport: true });
-  const { setTransporter } = await import('@averoa/utilities/Mail.js');
-  setTransporter({
-    async sendMail(message) {
-      const info = await transport.sendMail(message);
-      outbox.push(JSON.parse(info.message));
-      return info;
-    },
-  });
-
-  const { app } = await createApp();
-  await DB.migrate.latest({ directory: path.join(APP_ROOT, 'database/migrations'), loadExtensions: ['.js'] });
-  await DB.seed.run({ directory: path.join(APP_ROOT, 'database/seeds'), loadExtensions: ['.js'] });
-
-  server = app.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  http = client(`http://127.0.0.1:${server.address().port}`);
+  mailer = await fakeMail();
+  app = await testApp();
+  ({ http } = app);
 });
 
 after(async () => {
   await AuthService?.settled();
-  if (server) {
-    server.closeAllConnections?.();
-    await new Promise((resolve) => { server.close(resolve); });
-  }
-  await DB?.destroy();
-  const utilities = await import('@averoa/utilities');
-  await utilities.closeQueue?.();
+  mailer?.restore();
+  await app?.close();
 });
 
 describe('login and access tokens', () => {
@@ -292,7 +272,7 @@ describe('logout', () => {
 describe('POST /api/auth/register', () => {
   test('creates an unverified user, signs them in and sends a verification email', async () => {
     const email = uniqueEmail('New.User');
-    const sent = outbox.length;
+    const sent = mailer.sent.length;
     const res = await http('POST', '/api/auth/register', {
       body: {
         first_name: 'New', last_name: 'User', email: `  ${email.toUpperCase()} `, password: 'correct horse battery',
@@ -313,7 +293,7 @@ describe('POST /api/auth/register', () => {
 
     const [mail] = await newMail(sent, email.toLowerCase());
     assert.ok(mail, 'verification email sent');
-    assert.equal(mail.to[0].address, email.toLowerCase());
+    assert.equal(mail.to, email.toLowerCase());
     assert.match(mail.subject, /Verify your email address/);
     assert.match(mail.text, /^Hello New,/);
     assert.match(mail.text, /https:\/\/app\.example\.test\/verify-email\?token=/);
@@ -426,7 +406,7 @@ describe('email verification', () => {
     const row = await DB('users').where('email', user.email).first();
     await DB('user_tokens').where({ user_id: row.id }).update({ created_at: new Date(Date.now() - 120000) });
 
-    const sent = outbox.length;
+    const sent = mailer.sent.length;
     const res = await http('POST', '/api/auth/resend-verification', { token });
     assert.equal(res.status, 200, res.text);
     const [mail] = await newMail(sent, user.email);
@@ -442,7 +422,7 @@ describe('email verification', () => {
 
   test('the Retry-After header is set on 429', async () => {
     const user = await register('retryafter');
-    const res = await fetch(`http://127.0.0.1:${server.address().port}/api/auth/resend-verification`, {
+    const res = await fetch(`${app.url}/api/auth/resend-verification`, {
       method: 'POST', headers: { authorization: `Bearer ${user.data.token}` },
     });
     assert.equal(res.status, 429);
@@ -463,7 +443,7 @@ describe('password reset', () => {
 
   /** Requests a reset link; resolves the token from the mail. */
   async function requestReset(email) {
-    const sent = outbox.length;
+    const sent = mailer.sent.length;
     const res = await http('POST', '/api/auth/forgot-password', { body: { email } });
     assert.equal(res.status, 200, res.text);
     const mails = await newMail(sent, email);
@@ -474,7 +454,7 @@ describe('password reset', () => {
   }
 
   test('forgot-password answers the same for known and unknown addresses', async () => {
-    const sent = outbox.length;
+    const sent = mailer.sent.length;
     const known = await http('POST', '/api/auth/forgot-password', { body: { email: user.email } });
     const unknown = await http('POST', '/api/auth/forgot-password', { body: { email: uniqueEmail('nobody') } });
     assert.equal(known.status, 200);
@@ -484,7 +464,7 @@ describe('password reset', () => {
 
     const mails = (await newMail(sent)).filter((mail) => /Reset your password/.test(mail.subject));
     assert.equal(mails.length, 1, 'only the known address gets a mail');
-    assert.equal(mails[0].to[0].address, user.email);
+    assert.equal(mails[0].to, user.email);
   });
 
   test('forgot-password validates the address format only', async () => {
@@ -495,7 +475,7 @@ describe('password reset', () => {
 
   test('a second request within the throttle window sends nothing (same answer)', async () => {
     await requestReset(user.email);
-    const sent = outbox.length;
+    const sent = mailer.sent.length;
     const res = await http('POST', '/api/auth/forgot-password', { body: { email: user.email } });
     assert.equal(res.status, 200);
     assert.equal((await newMail(sent, user.email)).length, 0);
@@ -653,7 +633,7 @@ describe('rate limits on the public auth endpoints', () => {
     }
     assert.deepEqual(statuses, [200, 200, 200, 429]);
 
-    const res = await fetch(`http://127.0.0.1:${server.address().port}/api/auth/forgot-password`, {
+    const res = await fetch(`${app.url}/api/auth/forgot-password`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: uniqueEmail('limit') }),
     });
     assert.equal(res.status, 429);

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.4.0
+
+### Changed
+
+- Uses `@averoa/core` 2.3.1. The HTTP tests start the app with `testApp()` from `@averoa/core/testing.js` instead of
+  repeating the build / migrate / seed / listen / close steps in every file, and `tests/auth.test.js` records mail
+  with `fakeMail()`. The README has a "Writing an HTTP test" section; `make:test --http` generates the same setup.
+- `tests/helpers.js` no longer has `client()`: use `app.http()` from `testApp()`, or `client()` from
+  `@averoa/core/testing.js`.
+
 ## 2.3.0
 
 ### Added
