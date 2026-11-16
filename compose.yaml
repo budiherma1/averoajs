@@ -1,0 +1,176 @@
+# Local development stack: the app (development image, source mounted, nodemon)
+# plus MySQL 8, RabbitMQ (management UI), Redis, MinIO (S3) and Mailpit (SMTP catcher).
+#
+#   cp .env.example .env                 # then set TOKEN_SECRET
+#   docker compose up --build            # http://localhost:8888
+#   docker compose run --rm app npm run migrate:up
+#   docker compose --profile workers up  # also start the mail worker
+#   docker compose down                  # add -v to delete the data volumes
+#
+# App settings come from .env; the service host names below override the ones
+# in .env so the containers talk to each other. Host ports bind to 127.0.0.1 and
+# can be moved with the FORWARD_*_PORT variables (see .env.example).
+
+x-app: &app
+  build:
+    context: .
+    target: development
+  image: averoajs-dev
+  init: true
+  env_file: .env
+  environment:
+    DB_CLIENT: mysql2
+    DB_HOST: mysql
+    DB_PORT: 3306
+    DB_USER: ${DB_USER:-averoa}
+    DB_PASS: ${DB_PASS:-averoa}
+    DB_NAME: ${DB_NAME:-averoa}
+    RABBITMQ_SERVER: amqp://${RABBITMQ_USER:-averoa}:${RABBITMQ_PASS:-averoa}@rabbitmq:5672
+    REDIS_URL: redis://redis:6379
+    MAIL_HOST: mailpit
+    MAIL_PORT: 1025
+    MAIL_ENCRYPTION: ""
+    UPLOAD_DRIVER: ${UPLOAD_DRIVER:-local}
+    S3_ENDPOINT: http://minio:9000
+    S3_REGION: us-east-1
+    S3_BUCKET: ${S3_BUCKET:-averoa}
+    S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-averoa}
+    S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-averoa-secret}
+    S3_FORCE_PATH_STYLE: "true"
+    S3_PUBLIC_URL: http://localhost:${FORWARD_MINIO_PORT:-9000}/${S3_BUCKET:-averoa}
+  volumes:
+    - .:/app
+    # keep the image's node_modules (Linux binaries) instead of the host's
+    - /app/node_modules
+
+services:
+  app:
+    <<: *app
+    ports:
+      - 127.0.0.1:${FORWARD_APP_PORT:-8888}:${APP_PORT:-8888}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:' + (process.env.APP_PORT || 3000) + (process.env.READY_PATH || '/ready'), { signal: AbortSignal.timeout(4000) }).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-setup:
+        condition: service_completed_successfully
+
+  # optional: docker compose --profile workers up
+  mail-worker:
+    <<: *app
+    profiles: [workers]
+    command: ["node", "workers/mail.js"]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  mysql:
+    image: mysql:8.4.11
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-averoa}
+      MYSQL_USER: ${DB_USER:-averoa}
+      MYSQL_PASSWORD: ${DB_PASS:-averoa}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS:-root}
+    ports:
+      - 127.0.0.1:${FORWARD_DB_PORT:-3306}:3306
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      # TCP on 127.0.0.1 only answers once the init scripts are done
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  rabbitmq:
+    image: rabbitmq:4.3.7-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-averoa}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-averoa}
+    ports:
+      - 127.0.0.1:${FORWARD_RABBITMQ_PORT:-5672}:5672
+      - 127.0.0.1:${FORWARD_RABBITMQ_DASHBOARD_PORT:-15672}:15672
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7.4.12-alpine
+    ports:
+      - 127.0.0.1:${FORWARD_REDIS_PORT:-6379}:6379
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # S3-compatible storage for UPLOAD_DRIVER=s3. The official minio/minio images are
+  # no longer published; pgsty/minio is a maintained build of the same server.
+  minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-averoa}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-averoa-secret}
+    ports:
+      - 127.0.0.1:${FORWARD_MINIO_PORT:-9000}:9000
+      - 127.0.0.1:${FORWARD_MINIO_CONSOLE_PORT:-9001}:9001
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # one-shot: creates the bucket and makes its objects publicly readable (local only)
+  minio-setup:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb --ignore-existing "local/$$S3_BUCKET" &&
+        mc anonymous set download "local/$$S3_BUCKET"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-averoa}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-averoa-secret}
+      S3_BUCKET: ${S3_BUCKET:-averoa}
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+
+  mailpit:
+    image: axllent/mailpit:v1.32.0
+    ports:
+      - 127.0.0.1:${FORWARD_MAILPIT_PORT:-1025}:1025
+      - 127.0.0.1:${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025
+
+  # A queue/jobs worker runs the same way as mail-worker: copy that service,
+  # change `command` to your worker script and keep `profiles: [workers]`.
+
+volumes:
+  mysql-data:
+  rabbitmq-data:
+  redis-data:
+  minio-data:

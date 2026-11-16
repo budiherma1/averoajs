@@ -1,0 +1,35 @@
+# dependencies are installed inside the image
+node_modules
+npm-debug.log*
+
+# secrets and local settings never go into an image; pass them at runtime
+.env
+.env.*
+!.env.example
+
+# runtime data
+storages/logs/*
+!storages/logs/.gitkeep
+storages/upload/*
+!storages/upload/.gitkeep
+*.log
+*.sqlite
+*.sqlite3
+coverage
+
+# repository and editor files
+.git
+.gitignore
+.github
+.vscode
+.idea
+.DS_Store
+
+# container definitions
+Dockerfile
+.dockerignore
+compose.yaml
+docker-compose*.yml
+
+# tests and docs are not needed at runtime
+tests
