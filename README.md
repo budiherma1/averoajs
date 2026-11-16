@@ -48,6 +48,7 @@ in three npm packages ([`@averoa/core`](#ecosystem), [`@averoa/routes`](#ecosyst
 - [CLI generators](#cli-generators)
 - [Utilities](#utilities)
 - [Security](#security)
+- [Docker and deployment](#docker-and-deployment)
 - [Testing and linting](#testing-and-linting)
 - [Upgrading from 1.x](#upgrading-from-1x)
 - [Ecosystem](#ecosystem)
@@ -101,6 +102,8 @@ structure over assembling middleware by hand for every new service.
 | Database | One of the clients handled by `config/database.js`: `mysql2` (default, installed), `pg`, `better-sqlite3` (installed as a devDependency) or `sqlite3`. Install `pg` or `sqlite3` yourself when you use them. |
 | RabbitMQ | Optional. Only needed for `Queue()`, `Mail...queue()` and the mail worker. |
 | SMTP server | Optional. Only needed to send mail. |
+| `@aws-sdk/client-s3` | Optional. Only needed for `UPLOAD_DRIVER=s3`; an `optionalDependency`, installed unless you pass `--omit=optional`, see [Storing uploads in S3](#storing-uploads-in-s3). |
+| Docker | Optional. Docker Engine with Compose v2 for the `Dockerfile` and `compose.yaml`, see [Docker and deployment](#docker-and-deployment). |
 
 ## Quick start
 
@@ -148,6 +151,9 @@ curl -X POST http://localhost:8888/api/auth/login \
   -d '{"email":"demo@averoa.test","password":"password"}'
 # {"status":true,"data":{"token":"eyJ...","type":"Bearer","expires_in":"1h"}}
 ```
+
+**Using Docker instead.** `compose.yaml` runs the app with MySQL, RabbitMQ, Redis, MinIO and Mailpit; see
+[Docker and deployment](#docker-and-deployment).
 
 **Using MySQL or PostgreSQL instead.** Leave `DB_CLIENT=mysql2` (or set `DB_CLIENT=pg` after `npm install pg`), fill in
 `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS` and `DB_NAME`, and create the database before running the migrations.
@@ -205,15 +211,19 @@ averoajs/
 │   ├── web.js                mounted at /
 │   └── v2/                   route modules included by api.js
 ├── scripts/
-│   └── link-local.mjs        install local checkouts of the framework packages
+│   ├── link-local.mjs        install local checkouts of the framework packages
+│   └── run-tests.mjs         npm test: runs tests/*.test.js on every platform
 ├── storages/
 │   ├── logs/                 averoa.log, access.log, error.log
-│   └── upload/               uploaded files, served at /upload
+│   └── upload/               uploaded files (UPLOAD_DRIVER=local), served at /upload
 ├── tests/                    node:test suites
 ├── workers/
 │   └── mail.js               mail worker entry point: npm run worker:mail
+├── .dockerignore             files kept out of the Docker build context (.env, node_modules, ...)
 ├── .env.example              environment template
 ├── averoa.js                 CLI entry point: node averoa <command>
+├── compose.yaml              local development stack (app, MySQL, RabbitMQ, Redis, MinIO, Mailpit)
+├── Dockerfile                production image (and a development target for compose.yaml)
 ├── eslint.config.js          ESLint 10 flat config
 └── server.js                 application entry point: awaits start() from @averoa/core
 ```
@@ -338,7 +348,14 @@ All settings come from environment variables, loaded from `.env` in the applicat
 | --- | --- | --- |
 | `UPLOAD_MAX_FILE_SIZE` | `UploadImageMiddleware`: 2 MB; `*Form` routes: 10 MB | Maximum file size in bytes for both. `.env.example` sets `2097152` (2 MB). |
 | `UPLOAD_MAX_FILES` | `10` | Maximum number of files per `*Form` request. |
-| `UPLOAD_INLINE_EXTENSIONS` | `jpg,jpeg,png,gif,webp,avif,bmp,ico` | Extensions served inline from `/upload`; everything else is sent as a download. |
+| `UPLOAD_INLINE_EXTENSIONS` | `jpg,jpeg,png,gif,webp,avif,bmp,ico` | Extensions served inline from `/upload` (and stored without `Content-Disposition: attachment` in S3); everything else is sent as a download. |
+| `UPLOAD_DRIVER` | `local` | Where `UploadProvider` stores files: `local` (`storages/upload`) or `s3`. Any other value is an error. |
+| `S3_BUCKET` | none | Bucket name. Required when `UPLOAD_DRIVER=s3`. |
+| `S3_REGION` | `us-east-1` | Bucket region. |
+| `S3_ENDPOINT` | unset (AWS) | Endpoint of an S3-compatible service, e.g. `http://localhost:9000` (MinIO), `https://<account>.r2.cloudflarestorage.com`. |
+| `S3_FORCE_PATH_STYLE` | `false` | `true` for `endpoint/bucket/key` URLs instead of `bucket.endpoint/key`; MinIO needs it. |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | unset | Static credentials. Set both or neither; when unset the AWS SDK's default credential chain is used (IAM role, `AWS_*` variables, shared config). |
+| `S3_PUBLIC_URL` | derived | Base URL that `UploadProvider.url()` puts in front of a key, e.g. your CDN. Defaults to the bucket's endpoint URL. |
 
 ### Database
 
@@ -924,7 +941,8 @@ Jobs are plain modules in `app/Jobs`, exported from `app/Jobs/index.js` and impo
 ## File uploads
 
 AveroaJS offers two upload paths. Both keep files in memory while the request is parsed and write them through
-`UploadProvider`.
+`UploadProvider`, which stores them on the local disk (`UPLOAD_DRIVER=local`, the default) or in an S3 bucket
+(`UPLOAD_DRIVER=s3`, see [Storing uploads in S3](#storing-uploads-in-s3)).
 
 ### Upload columns on `*Form` crud routes
 
@@ -947,7 +965,8 @@ router.crud('Teacher', 'teachers', () => {
 ```
 
 `Crud.create` and `Crud.update` store each file under `storages/upload/<route prefix>/` and save the relative path,
-such as `teachers/0c5e...-photo.png`, in the column. `Crud.update` deletes the previous file. Required upload columns
+such as `teachers/0c5e...-photo.png`, in the column. With `UPLOAD_DRIVER=s3` the same string is the object key.
+`Crud.update` deletes the previous file. Required upload columns
 are only enforced on create.
 
 Any file type is accepted on these routes. Limits: `UPLOAD_MAX_FILE_SIZE` (default 10 MB, `413` when exceeded),
@@ -994,16 +1013,56 @@ themselves after every middleware. Do not add it to `MiddlewareProvider` for the
 
 | Method | Description |
 | --- | --- |
-| `upload(file, route, oldFile?)` | Write a multer memory file under `storages/upload/<route>/` with a random, sanitised name; delete `oldFile` if given. Returns the stored relative name. |
-| `remove(relativeName)` | Delete a stored file. Names outside `storages/upload` are ignored. |
-| `awsS3()` | Empty stub. Implement it and change `upload()` to use it if you need S3 storage. |
+| `upload(file, route, oldFile?)` | Store a multer memory file as `<route>/<uuid>-<name>` (sanitised) with the active driver and delete `oldFile` if given. Returns the stored name: a path relative to `storages/upload` (`local`) or the object key (`s3`). Save this string; build links with `url()`. |
+| `remove(name)` | Delete a stored file with the active driver. Names `upload()` cannot produce (`..`, absolute paths, other characters) are ignored and return `false`. |
+| `url(name)` | Public URL of a stored name: `/upload/<name>` (`local`) or `S3_PUBLIC_URL/<name>` (`s3`, defaults to the bucket's endpoint URL). `null` for an unsafe name. |
+| `driver()` | The active driver from `UPLOAD_DRIVER`. |
+| `local(...)`, `awsS3(...)` | The drivers behind `upload()`, callable directly. |
+| `removeLocal(name)`, `removeS3(key)` | The drivers behind `remove()`. |
+
+### Storing uploads in S3
+
+`UPLOAD_DRIVER=s3` stores uploads in AWS S3 or any S3-compatible service such as MinIO,
+Cloudflare R2 or DigitalOcean Spaces. The SDK, `@aws-sdk/client-s3`, is listed in `optionalDependencies` and loaded
+the first time a file is stored, so `npm ci` and `npm ci --omit=dev` (the production Docker image) install it. If you
+only use local storage you can leave it out with `npm ci --omit=optional`; with `UPLOAD_DRIVER=s3` the first upload
+then fails with `UPLOAD_DRIVER=s3 needs the @aws-sdk/client-s3 package`.
+
+```ini
+UPLOAD_DRIVER=s3
+S3_BUCKET=my-app-uploads
+S3_REGION=eu-west-1
+# S3-compatible services only:
+# S3_ENDPOINT=http://localhost:9000
+# S3_FORCE_PATH_STYLE=true
+# omit on AWS to use the IAM role / default credential chain:
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+# optional: CDN or custom domain used by UploadProvider.url()
+S3_PUBLIC_URL=https://cdn.example.com
+```
+
+- **Keys.** Objects get the same sanitised `<route>/<uuid>-<name>` as local files, and that key is what
+  `upload()` returns and `Crud` saves in the column. Replacing a file uploads the new object first, then deletes the
+  old one; if that delete fails, the upload still succeeds and a warning is logged.
+- **Headers.** `Content-Type` comes from the file extension, never from the client. Following the `/upload` rules,
+  only extensions on the inline allowlist (`UPLOAD_INLINE_EXTENSIONS` or `AppProvider.uploads()`; raster images by
+  default) are stored without `Content-Disposition`. Everything else gets
+  `Content-Disposition: attachment; filename="<key name>"`, and HTML, SVG, XML, JavaScript and CSS are stored as
+  `application/octet-stream` unless their extension is allowlisted.
+- **Serving.** A bucket cannot send the sandbox CSP and `nosniff` headers that `/upload` adds, so serve it from its own
+  domain (the S3 endpoint or a CDN), never from a path or subdomain that shares cookies with the application, and add
+  those headers at the CDN if you can. Make the bucket (or a CDN in front of it) publicly readable only if the files
+  are meant to be public; for private files keep the bucket private and generate presigned URLs with
+  `@aws-sdk/s3-request-presigner`.
+- **Permissions.** The credentials need `s3:PutObject` and `s3:DeleteObject` on the bucket's objects.
 
 ### Serving uploads
 
 `storages/upload` is served at `/upload`. Every response carries `X-Content-Type-Options: nosniff` and
 `Content-Security-Policy: default-src 'none'; sandbox`. Only extensions on the inline allowlist (raster images by
 default, see `UPLOAD_INLINE_EXTENSIONS`) are shown in the browser; everything else, including SVG and HTML, is sent
-with `Content-Disposition: attachment`.
+with `Content-Disposition: attachment`. With `UPLOAD_DRIVER=s3` the files are served by the bucket, not by `/upload`.
 
 ## Database: migrations and seeds
 
@@ -1186,11 +1245,86 @@ Same-origin detection compares the `Origin` host and port with the request's `Ho
       known password.
 - [ ] Sample routes (`/users`, `POST /api/users`, `/teacher`, `/api/teachers`, `/api/v2/*`) removed or protected. Only
       `POST /api/users` and the Teacher writes require a JWT; `/users` and the Teacher reads are public.
+- [ ] Uploads on persistent storage: a volume for `storages/upload`, or `UPLOAD_DRIVER=s3` (dependencies installed
+      without `--omit=optional`).
 - [ ] `storages/logs` and `storages/upload` writable and persistent. Logs are appended to indefinitely; rotate them
       with your platform's tools. In production `Log` writes to the file only.
 - [ ] Started with `npm start` (`node server.js`) under a process manager or container runtime, not `npm run dev`.
       On `SIGTERM` the server stops accepting connections, calls `AppProvider.shutdown()`, closes the database and
       queue connections, and exits; after `SHUTDOWN_TIMEOUT` ms it exits with code 1.
+
+## Docker and deployment
+
+### Local development with Compose
+
+`compose.yaml` starts the application with its services:
+
+| Service | Image | Host port (`127.0.0.1`) | Purpose |
+| --- | --- | --- | --- |
+| `app` | `Dockerfile`, `development` target | `FORWARD_APP_PORT` (8888) → `APP_PORT` | `npm run dev` (nodemon) with the project folder mounted at `/app` |
+| `mysql` | `mysql:8.4.11` | `FORWARD_DB_PORT` (3306) | database `DB_NAME`, user `DB_USER` / `DB_PASS` (default `averoa` / `averoa`) |
+| `rabbitmq` | `rabbitmq:4.3.7-management-alpine` | `FORWARD_RABBITMQ_PORT` (5672), `FORWARD_RABBITMQ_DASHBOARD_PORT` (15672) | queues; management UI at <http://localhost:15672> (`RABBITMQ_USER` / `RABBITMQ_PASS`, default `averoa` / `averoa`) |
+| `redis` | `redis:7.4.12-alpine` | `FORWARD_REDIS_PORT` (6379) | available to the app as `REDIS_URL=redis://redis:6379` |
+| `minio` | `pgsty/minio` | `FORWARD_MINIO_PORT` (9000), `FORWARD_MINIO_CONSOLE_PORT` (9001) | S3-compatible storage for `UPLOAD_DRIVER=s3` (`MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`) |
+| `minio-setup` | `pgsty/minio` | none | one-shot: creates the `S3_BUCKET` bucket (default `averoa`) and makes it publicly readable |
+| `mailpit` | `axllent/mailpit` | `FORWARD_MAILPIT_PORT` (1025), `FORWARD_MAILPIT_DASHBOARD_PORT` (8025) | catches every mail the app sends; inbox at <http://localhost:8025> |
+| `mail-worker` | same as `app` | none | `node workers/mail.js`; only with `--profile workers` |
+
+The containers read `.env` and override the host names in it, so `DB_HOST`, `RABBITMQ_SERVER`, `MAIL_HOST` and the
+`S3_*` variables point at the services above. The official `minio/minio` images are no longer published; `pgsty/minio`
+is a maintained build of the same server.
+
+```bash
+cp .env.example .env
+# set TOKEN_SECRET in .env (npm run generate:token, or openssl rand -hex 64)
+docker compose up --build -d          # builds the image and waits for MySQL, RabbitMQ, Redis and MinIO
+docker compose run --rm app npm run migrate:up
+docker compose run --rm app npm run seed:run    # development data only
+curl http://localhost:8888/api
+```
+
+| Task | Command |
+| --- | --- |
+| Logs | `docker compose logs -f app` |
+| Any npm script in the container | `docker compose run --rm app npm run <script>` |
+| Generate a secret without Node.js on the host | `docker compose run --rm --no-deps app npm run -s generate:token` |
+| Start the mail worker too | `docker compose --profile workers up -d` |
+| Store uploads in MinIO | set `UPLOAD_DRIVER=s3` in `.env`, then `docker compose up -d` |
+| Rebuild after changing `package.json` | `docker compose up --build -d --renew-anon-volumes` |
+| Stop | `docker compose down` (add `-v` to delete the MySQL, RabbitMQ, Redis and MinIO volumes) |
+
+The project folder is mounted into the container, so nodemon restarts the app when you edit a file; `node_modules`
+stays the one built into the image (Linux binaries). Ports bind to `127.0.0.1` only; change a `FORWARD_*_PORT`
+variable in `.env` when one is already in use on your machine. The credentials in `compose.yaml` are local
+development defaults; don't reuse the file for a server.
+
+### Production image
+
+The `Dockerfile`'s last stage is the production image:
+
+```bash
+docker build -t averoajs .
+docker run -d --name averoajs -p 3000:3000 \
+  -e TOKEN_SECRET=... -e SESSION_SECRET=... \
+  -e DB_HOST=... -e DB_USER=... -e DB_PASS=... -e DB_NAME=... \
+  -v averoajs-uploads:/app/storages/upload \
+  -v averoajs-logs:/app/storages/logs \
+  averoajs
+docker run --rm --env-file .env.production averoajs npm run migrate:up   # as a release step
+```
+
+- Multi-stage build on `node:22.23.4-alpine3.23` (exact tag; override with `--build-arg NODE_IMAGE=...`, for example
+  to pin a digest). Production dependencies only (`npm ci --omit=dev`), `NODE_ENV=production`.
+- Runs as the unprivileged `node` user. Application files belong to root; only `storages/` is writable.
+- Listens on `APP_PORT` (default `3000`). A `HEALTHCHECK` requests the readiness probe from `@averoa/core` (`GET /ready`, or `READY_PATH`)
+  on that port, so the container is unhealthy while the database or another readiness check fails.
+- `CMD ["node", "server.js"]` runs Node.js directly, so `SIGTERM` reaches the app's graceful shutdown.
+- `.env` is never copied into the image (`.dockerignore`); pass settings as environment variables or secrets.
+- In production `Log` writes to `storages/logs/averoa.log`, not to the console: mount `storages/logs`, or change
+  the logger if your platform collects stdout.
+- `npm run seed:run` does not work in this image: the seeders need `@faker-js/faker`, a devDependency. Seed from the
+  development image instead, and never against production data.
+- `@aws-sdk/client-s3` (an optional dependency) is included, so `UPLOAD_DRIVER=s3` works without a rebuild.
 
 ## Testing and linting
 
@@ -1204,10 +1338,31 @@ npm test
 | --- | --- |
 | `tests/app.test.js` | Boots the real app with `createApp()` on in-memory SQLite (`better-sqlite3`), runs the migrations and seeders, and tests the sample routes, CSRF, the JWT flow and the Teacher CRUD over HTTP, including `401` for writes without a token |
 | `tests/unit.test.js` | `PasswordHelper`, `UploadProvider` path sanitising (in a temporary app root), `UploadImageMiddleware` (`req.file`, `req.dataFiles` for `upload` columns, `422` / `400` errors) and the `TOKEN_SECRET` check |
+| `tests/upload-s3.test.js` | `UPLOAD_DRIVER` selection and the `s3` driver against a mocked SDK: keys, client settings, `Content-Type` / `Content-Disposition`, replacing and removing objects, `url()`, configuration errors and the missing-SDK error |
+| `tests/upload-s3-minio.test.js` | The `s3` driver against a real MinIO server. Skipped unless `S3_TEST_ENDPOINT` is set (see below) |
 | `tests/helpers.js` | `setTestEnv()` (sets `NODE_ENV=test`, SQLite, random secrets) and a `fetch` client with a timeout |
 
-`npm test` runs `node --test tests/*.test.js`; the shell expands the pattern, so it works on every supported Node.js
-version. No database server is needed.
+`npm test` runs `scripts/run-tests.mjs`, which passes every `tests/*.test.js` file to `node --test`. The script lists
+the files itself because Windows shells and Node.js 20 do not expand the pattern, so `npm test` works the same on
+Windows, macOS and Linux and on every supported Node.js version. Options and file names are passed on:
+
+```bash
+npm test -- --test-name-pattern=UploadProvider
+npm test -- tests/unit.test.js
+```
+
+No database server is needed. To run the S3 integration test, start MinIO and point the test at it:
+
+```bash
+docker run -d --rm --name averoa-minio -p 127.0.0.1:9000:9000 \
+  -e MINIO_ROOT_USER=averoa -e MINIO_ROOT_PASSWORD=averoa-secret \
+  pgsty/minio:RELEASE.2026-08-04T00-00-00Z server /data
+S3_TEST_ENDPOINT=http://127.0.0.1:9000 S3_TEST_ACCESS_KEY_ID=averoa \
+  S3_TEST_SECRET_ACCESS_KEY=averoa-secret npm test
+docker stop averoa-minio
+```
+
+The bucket (`S3_TEST_BUCKET`, default `averoa-test`) is created when it does not exist.
 
 Lint with ESLint 10 (flat config in `eslint.config.js`):
 
