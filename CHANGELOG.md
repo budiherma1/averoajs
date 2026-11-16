@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.2
+
+### Changed
+
+- Uses `@averoa/utilities` 2.1.1 and `@averoa/core` 2.1.1: `Model.search()` keeps the query's other conditions, job
+  workers hand unknown jobs to newer workers during rolling deploys, array route ids are answered 404.
+- **`TRUST_REQUEST_ID`**: an incoming `X-Request-Id` is reused only with `TRUST_REQUEST_ID=true` (`TRUST_PROXY` alone
+  no longer trusts it). `.env.example`, the configuration table and the production checklist say so.
+
 ## 2.2.1
 
 ### Fixed

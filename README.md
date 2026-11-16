@@ -153,7 +153,7 @@ Open <http://localhost:8888> for the welcome page, or call the API:
 
 ```bash
 curl http://localhost:8888/api
-# {"name":"Averoa","version":"2.2.1"}
+# {"name":"Averoa","version":"2.2.2"}
 
 curl -X POST http://localhost:8888/api/auth/login \
   -H 'content-type: application/json' \
@@ -412,7 +412,7 @@ See [Observability](#observability) for the details.
 | `LOG_FORMAT` | `pretty` for `development` / `test`, `json` otherwise | Console format of the application log: `json` or `pretty`. Files are always JSON lines. |
 | `ACCESS_LOG_FORMAT` | `combined` in files; `json` or `dev` on stdout | HTTP access log format: `combined`, `json` or `dev` (stdout only). |
 | `LOG_REDACT` | empty | Extra keys to redact in logged objects, comma separated. |
-| `TRUST_REQUEST_ID` | trusted only when `TRUST_PROXY` is set | `true` reuses a valid incoming `X-Request-Id`, `false` always generates one. |
+| `TRUST_REQUEST_ID` | `false` | `true` reuses a valid incoming `X-Request-Id`; set it only when your proxy sets or overwrites that header. |
 | `REQUEST_ID_HEADER` | `X-Request-Id` | Request id header name. |
 | `HEALTH_PATH` | `/health` | Liveness probe path; `false` or `off` disables it. |
 | `READY_PATH` | `/ready` | Readiness probe path; `false` or `off` disables it. |
@@ -1794,8 +1794,8 @@ default with `SESSION_STORE=redis`), otherwise each instance counts on its own a
       your app depends on (Redis, an upstream API) added in `AppProvider.health()`.
 - [ ] `SHUTDOWN_DELAY` set (for example `5000`) behind a load balancer or on Kubernetes, and the platform's grace
       period longer than `SHUTDOWN_DELAY + SHUTDOWN_TIMEOUT`.
-- [ ] `TRUST_REQUEST_ID` decided: leave it unset (trusted with `TRUST_PROXY`) when your proxy sets or overwrites
-      `X-Request-Id`; set it to `false` when the proxy passes the client's header through.
+- [ ] `TRUST_REQUEST_ID=true` only when your proxy sets or overwrites `X-Request-Id`; leave it unset when the proxy
+      passes the client's header through (nginx and AWS ALB do by default).
       without `--omit=optional`).
 - [ ] Started with `npm start` (`node server.js`) under a process manager or container runtime, not `npm run dev`.
       On `SIGTERM` `/ready` answers `503`, then (after `SHUTDOWN_DELAY`) the server stops accepting connections, calls
@@ -1815,8 +1815,8 @@ reports, and you can find every line of that request with one search.
 
 The id is a random UUID unless the request carries a **trusted** and **valid** `X-Request-Id`:
 
-- trusted: `TRUST_REQUEST_ID=true`, or `TRUST_REQUEST_ID` unset and `TRUST_PROXY` set, because a proxy in front of
-  the app is expected to set or sanitise the header. Without a proxy a client could otherwise choose its own id;
+- trusted: `TRUST_REQUEST_ID=true`, set when a proxy in front of the app sets or overwrites the header. Otherwise a
+  client could choose its own id;
 - valid: 1 to 128 characters from `A-Z a-z 0-9 - _ . : + = / @`. Anything else is replaced, never echoed.
 
 Anywhere in the request (a controller, a repository, a model hook) the id is available without passing `req`
@@ -2216,10 +2216,10 @@ The complete list of breaking changes is in each package's changelog:
 
 | Package | Version | Description | Links |
 | --- | --- | --- | --- |
-| averoajs | 2.2.1 | This application boilerplate (not published to npm) | [GitHub](https://github.com/budiherma1/averoajs) |
-| `@averoa/core` | 2.1.0 | Builds the Express app (security, sessions, CSRF, CORS, views, routes, errors, shutdown), the knexfile and the `averoa` CLI | [GitHub](https://github.com/budiherma1/AveroaCore) · [npm](https://www.npmjs.com/package/@averoa/core) |
+| averoajs | 2.2.2 | This application boilerplate (not published to npm) | [GitHub](https://github.com/budiherma1/averoajs) |
+| `@averoa/core` | 2.1.1 | Builds the Express app (security, sessions, CSRF, CORS, views, routes, errors, shutdown), the knexfile and the `averoa` CLI | [GitHub](https://github.com/budiherma1/AveroaCore) · [npm](https://www.npmjs.com/package/@averoa/core) |
 | `@averoa/routes` | 3.1.0 | Laravel-style router: `'Controller@method'`, scopes, `*Form` routes, `crud()` hooks | [GitHub](https://github.com/budiherma1/AveroaRoute) · [npm](https://www.npmjs.com/package/@averoa/routes) |
-| `@averoa/utilities` | 2.1.0 | Model, Crud, FilterSearch, DB, Mail, Queue, mail worker, View, Log, Fetch, Validator | [GitHub](https://github.com/budiherma1/AveroaUtilities) · [npm](https://www.npmjs.com/package/@averoa/utilities) |
+| `@averoa/utilities` | 2.1.1 | Model, Crud, FilterSearch, DB, Mail, Queue, mail worker, View, Log, Fetch, Validator | [GitHub](https://github.com/budiherma1/AveroaUtilities) · [npm](https://www.npmjs.com/package/@averoa/utilities) |
 | `@averoa/models`, `providers`, `repositories`, `helpers`, `jobs` | 1.0.3 | 1.x re-export packages, superseded by the `#` subpath imports | [models](https://www.npmjs.com/package/@averoa/models) · [providers](https://www.npmjs.com/package/@averoa/providers) · [repositories](https://www.npmjs.com/package/@averoa/repositories) · [helpers](https://www.npmjs.com/package/@averoa/helpers) · [jobs](https://www.npmjs.com/package/@averoa/jobs) |
 
 ## Troubleshooting

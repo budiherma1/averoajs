@@ -7,7 +7,7 @@ class SampleController {
   async sampleMethod(req, res) {
     res.json({
       name: 'Averoa',
-      version: '2.2.1',
+      version: '2.2.2',
     });
   }
 
