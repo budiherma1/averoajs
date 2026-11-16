@@ -45,6 +45,7 @@ in three npm packages ([`@averoa/core`](#ecosystem), [`@averoa/routes`](#ecosyst
 - [Authentication](#authentication)
 - [Views](#views)
 - [Mail, queues and jobs](#mail-queues-and-jobs)
+- [Jobs and scheduling](#jobs-and-scheduling)
 - [File uploads](#file-uploads)
 - [Database: migrations and seeds](#database-migrations-and-seeds)
 - [CLI generators](#cli-generators)
@@ -93,6 +94,7 @@ structure over assembling middleware by hand for every new service.
 | Sessions | MemoryStore for development, `SESSION_STORE=redis` for production and several instances |
 | Views | Edge 5 templates with dot-notation names, global variables and a CSRF token in every view |
 | Mail and queues | Nodemailer with Edge templates, RabbitMQ publishing, and a mail worker with retries and reconnects |
+| Jobs and scheduling | `Job` classes with delays, retries, backoff, timeouts and a failed-jobs queue; a job worker; a cron scheduler in `app/Console/Kernel.js` |
 | Database | MySQL (`mysql2`, default), PostgreSQL (`pg`) and SQLite (`better-sqlite3`, `sqlite3`) through Knex |
 | Operations | Request IDs, structured (JSON) logs with redaction, stdout or file logging, `/health` and `/ready` probes, graceful shutdown on `SIGTERM` / `SIGINT` |
 | Testing | `node --test` integration tests that boot the real app on in-memory SQLite |
@@ -104,7 +106,7 @@ structure over assembling middleware by hand for every new service.
 | Node.js | `^20.19.0 \|\| ^22.13.0 \|\| >=24` (`engines` in `package.json`, the range declared by ESLint 10 and `@faker-js/faker` 10): 20.19 or later, 22.13 or later on the 22.x line, or 24 and newer. `npm test` runs on all of them. |
 | npm | 10 or later (declared by `@faker-js/faker` 10, which the seeders use) |
 | Database | One of the clients handled by `config/database.js`: `mysql2` (default, installed), `pg`, `better-sqlite3` (installed as a devDependency) or `sqlite3`. Install `pg` or `sqlite3` yourself when you use them. |
-| RabbitMQ | Optional. Only needed for `Queue()`, `Mail...queue()` and the mail worker. |
+| RabbitMQ | Optional. Only needed for `Queue()`, `Mail...queue()`, jobs, the workers and the scheduler. |
 | SMTP server | Optional. Only needed to send mail. |
 
 ## Quick start
@@ -183,10 +185,10 @@ These routes are samples. `/api/auth/me`, `POST /api/users` and the Teacher writ
 ```text
 averoajs/
 ├── app/
-│   ├── Console/              placeholder for project commands (not wired yet)
+│   ├── Console/              Kernel.js: the task schedule (npm run schedule:run)
 │   ├── Controllers/          request handlers, referenced as 'NameController@method'
 │   ├── Helpers/              helpers, exported from index.js          -> '#helpers'
-│   ├── Jobs/                 jobs and workers                          -> '#jobs'
+│   ├── Jobs/                 background jobs (Job classes)             -> '#jobs'
 │   ├── Middleware/           route middleware, referenced by file name
 │   ├── Models/               Objection models with column definitions  -> '#models'
 │   ├── Providers/            App, Middleware, Upload and View providers -> '#providers'
@@ -218,7 +220,10 @@ averoajs/
 │   └── upload/               uploaded files, served at /upload
 ├── tests/                    node:test suites
 ├── workers/
-│   └── mail.js               mail worker entry point: npm run worker:mail
+│   ├── jobs.js               job worker: npm run worker:jobs
+│   ├── mail.js               mail worker: npm run worker:mail
+│   ├── retry-failed-jobs.js  re-queue failed jobs: npm run queue:retry
+│   └── scheduler.js          scheduler: npm run schedule:run
 ├── .env.example              environment template
 ├── averoa.js                 CLI entry point: node averoa <command>
 ├── eslint.config.js          ESLint 10 flat config
@@ -418,6 +423,16 @@ See [Observability](#observability) for the details.
 
 SMTP is the only mail transport.
 
+### Jobs and scheduling
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `JOBS_QUEUE` | `jobs` | Queue of jobs that set no `static queue` (`config/queue.js` `jobsQueue`). Failed jobs are kept in `<queue>.failed`. |
+| `JOBS_WORKER_QUEUES` | unset | `npm run worker:jobs`: comma-separated queues to consume. Unset: the queues of the jobs in `app/Jobs`. |
+| `JOBS_CONCURRENCY` | `1` | `npm run worker:jobs`: jobs run at the same time per queue. |
+| `SCHEDULE_TIMEZONE` | unset | Default IANA time zone of the schedule. Unset: the process time zone. |
+| `MAIL_FROM` | `no-reply@localhost` | Sender of `SendWelcomeEmailJob`. |
+
 ### Fetch
 
 | Variable | Default | Description |
@@ -591,7 +606,7 @@ boilerplate registers `testVariable`, `sayHello()` and `menu`.
 | --- | --- | --- |
 | `app/Repositories` | `#repositories` | `UserRepository` (`findActiveById`, `findActiveByEmail`, `findByCredentials`), `ExampleRepository` (sample) |
 | `app/Helpers` | `#helpers` | `PasswordHelper` (`hash`, `hashSync`, `verify`, `isHash`), `ExampleHelper` (sample) |
-| `app/Jobs` | `#jobs` | `EmailSubscriberJob` (mail worker), `GenerateAppTokenJob` (`npm run generate:token`), `ExampleJob` (sample) |
+| `app/Jobs` | `#jobs` | `SendWelcomeEmailJob`, `PruneSoftDeletedJob` (background jobs, see [Jobs and scheduling](#jobs-and-scheduling)), `EmailSubscriberJob` (mail worker), `GenerateAppTokenJob` (`npm run generate:token`) |
 | `app/Strategies` | `#strategies` | `JwtStrategy`, `LocalStrategy` |
 
 Each folder has an `index.js` that re-exports its modules. The generators add new files to it.
@@ -1086,8 +1101,192 @@ options (`{ queue, prefetch, maxRetries }`), edit the `startMailWorker()` call i
 
 ### Jobs
 
-Jobs are plain modules in `app/Jobs`, exported from `app/Jobs/index.js` and imported with `#jobs`. Create one with
-`node averoa make:job ReportJob`. There is no built-in scheduler.
+Background jobs (`app/Jobs`) and scheduled tasks (`app/Console/Kernel.js`) are described in
+[Jobs and scheduling](#jobs-and-scheduling).
+
+## Jobs and scheduling
+
+Background jobs and the scheduler come from `@averoa/utilities` (`Job`, `startJobWorker`, `Schedule`,
+`startScheduler`); its README has the full reference. They need RabbitMQ (`RABBITMQ_SERVER`). The application runs up
+to three kinds of process:
+
+| Process | Command | Scale |
+| --- | --- | --- |
+| Web server | `npm start` | as many as you need |
+| Job worker | `npm run worker:jobs` (`workers/jobs.js`) | as many as you need |
+| Scheduler | `npm run schedule:run` (`workers/scheduler.js`) | **exactly one** |
+
+### Writing a job
+
+```bash
+node averoa make:job SendInvoiceJob
+```
+
+creates `app/Jobs/SendInvoiceJob.js` and adds it to `app/Jobs/index.js`:
+
+```js
+import { Job } from '@averoa/utilities';
+
+class SendInvoiceJob extends Job {
+  static tries = 3;                       // total attempts
+  static backoff = [10000, 60000];        // ms before retry 1, 2, ... (or a number, or (retry) => ms)
+  static timeout = 60000;                 // ms per attempt
+  // static queue = 'billing';            // default: JOBS_QUEUE or 'jobs'
+
+  async handle({ invoiceId }, { attempt, signal }) {
+    // throw (or reject) to retry
+  }
+
+  async failed({ invoiceId }, error) {
+    // called once, after the last attempt failed
+  }
+}
+
+export default SendInvoiceJob;
+```
+
+Dispatch it from a controller, a model hook or another job:
+
+```js
+import { SendInvoiceJob } from '#jobs';
+
+await SendInvoiceJob.dispatch({ invoiceId: invoice.id });                    // as soon as a worker is free
+await SendInvoiceJob.dispatch({ invoiceId: invoice.id }, { delay: 60_000 }); // in a minute (ms or a Date)
+await SendInvoiceJob.dispatchSync({ invoiceId: invoice.id });                // now, in this process, no RabbitMQ
+```
+
+The payload is JSON: pass ids, not model instances, and read the current row in `handle()`. Delayed jobs and retries
+with a backoff go through per-delay TTL queues (`<queue>.delay.<ms>`) that dead-letter into the job queue, so no
+RabbitMQ plugin is needed. Jobs run at least once: a worker that dies mid-job leaves the message to be delivered again,
+so make `handle()` safe to repeat.
+
+The boilerplate ships two jobs:
+
+| Job | What it does |
+| --- | --- |
+| `SendWelcomeEmailJob` | `dispatch({ userId })`: mails `resources/views/emails/welcome.edge` to the user (from `MAIL_FROM`). Users that no longer exist or are soft-deleted get nothing. 5 tries with exponential backoff from 10 s. |
+| `PruneSoftDeletedJob` | `dispatch({ days = 30, models? })`: hard-deletes rows whose `deleted_at` is older than `days` days, in every model with timestamps or in the named `#models` only. Scheduled daily at 03:00. |
+
+`EmailSubscriberJob` (the mail worker) and `GenerateAppTokenJob` (`npm run generate:token`) are plain functions, not
+`Job` classes, and the job worker ignores them.
+
+### Running the job worker
+
+```bash
+npm run worker:jobs
+```
+
+`workers/jobs.js` loads `.env`, binds the models to the database, and runs every `Job` class exported by
+`app/Jobs/index.js`, consuming the queues those jobs use. `JOBS_WORKER_QUEUES` limits it to a comma-separated list of
+queues (for example a separate worker for a slow queue) and `JOBS_CONCURRENCY` sets how many jobs run at the same time
+per queue. It reconnects when the broker restarts. On `SIGTERM` or `SIGINT` it stops taking jobs, waits for the running
+ones, closes the AMQP and database connections and exits; after `SHUTDOWN_TIMEOUT` ms it exits with code 1, and the
+unfinished jobs are delivered again.
+
+A job is looked up by its registered name in the classes exported from `app/Jobs/index.js`; nothing in a message
+decides which file is loaded. A job that fails after its last try is recorded in the queue `<queue>.failed` (with the
+payload and the error) and its `failed()` method is called. Inspect or purge that queue in the RabbitMQ management UI;
+move the records back to the job queue with:
+
+```bash
+npm run queue:retry                  # JOBS_QUEUE
+npm run queue:retry -- billing 100   # a queue, at most 100 jobs
+```
+
+### Scheduling tasks
+
+The schedule lives in `app/Console/Kernel.js`:
+
+```js
+import { PruneSoftDeletedJob, SendReportJob } from '#jobs';
+
+export default function kernel(schedule) {
+  schedule.job(PruneSoftDeletedJob, { days: 30 }).dailyAt('03:00');
+  schedule.job(SendReportJob).cron('0 8 * * 1-5').timezone('Asia/Jakarta');
+  schedule.call(() => cleanTmpFiles(), 'clean-tmp').everyFifteenMinutes().withoutOverlapping();
+}
+```
+
+| Frequency | Options |
+| --- | --- |
+| `cron('*/5 * * * *')` (5 fields, or 6 with seconds), `everyMinute()`, `everyTwoMinutes()`, `everyFiveMinutes()`, `everyTenMinutes()`, `everyFifteenMinutes()`, `everyThirtyMinutes()`, `hourly()`, `hourlyAt(17)`, `daily()`, `dailyAt('03:00')`, `weekly()`, `weeklyOn(1, '08:00')`, `monthly()`, `monthlyOn(15, '12:00')` | `timezone('Europe/Paris')`, `withoutOverlapping()` (skip a run while the previous one is still running; for `job()` it only covers the dispatch), `name('...')` |
+
+`schedule.job()` dispatches the job, which then runs on a job worker; `schedule.call()` runs the function inside the
+scheduler process. Run it with:
+
+```bash
+npm run schedule:run             # long-running; SIGTERM / SIGINT waits for running tasks and exits
+npm run schedule:run -- --once   # run what is due in the current minute and exit
+```
+
+Use `--once` when a system cron (`* * * * * cd /app && npm run schedule:run -- --once`) or a Kubernetes CronJob starts
+it every minute instead. Cron expressions are parsed by [croner](https://github.com/hexagon/croner) (a dependency of the
+boilerplate). Times use `SCHEDULE_TIMEZONE`, else the process time zone (`TZ`), unless an event sets its own.
+
+> [!IMPORTANT]
+> Run **one** scheduler process per application. Every running scheduler fires every task, so two of them dispatch
+> every job twice. Job workers can be scaled freely. If you need more than one scheduler for availability, pass a
+> `lock` to `startScheduler()` backed by a shared store (for example Redis `SET key NX PX`), as described in the
+> `@averoa/utilities` README.
+
+### Testing jobs
+
+`dispatchSync()` runs a job in the test process (with the same JSON round trip as `dispatch()`), and `fakeJobs()` from
+`@averoa/utilities` records `dispatch()` calls instead of publishing them:
+
+```js
+import { fakeJobs } from '@averoa/utilities';
+
+const fake = fakeJobs();
+// ... call the code that dispatches
+assert.equal(fake.dispatched[0].job, 'SendWelcomeEmailJob');
+fake.restore();
+```
+
+### Running workers in production
+
+Run the web server, the job worker(s), the mail worker (if you queue mail) and one scheduler as separate processes
+from the same code and the same environment. Each of them stops cleanly on `SIGTERM`; give them a stop grace period
+longer than `SHUTDOWN_TIMEOUT`, and `SHUTDOWN_TIMEOUT` longer than your slowest job.
+
+With Docker, build one image and start it with a different command per service:
+
+```yaml
+# docker-compose.yml (excerpt)
+x-app: &app
+  image: my-averoa-app
+  env_file: .env
+  restart: unless-stopped
+  stop_grace_period: 30s
+  depends_on: [rabbitmq]
+
+services:
+  web:
+    <<: *app
+    command: ["node", "server.js"]
+    ports: ["3000:3000"]
+  worker:
+    <<: *app
+    command: ["node", "workers/jobs.js"]
+    deploy:
+      replicas: 2                  # scale job workers freely
+  scheduler:
+    <<: *app
+    command: ["node", "workers/scheduler.js"]
+    deploy:
+      replicas: 1                  # never more than one
+  rabbitmq:
+    image: rabbitmq:3-management
+```
+
+Start the processes with `node` (as above) rather than `npm run`, so `SIGTERM` reaches Node directly. With a process
+manager such as PM2 or systemd, the same applies: one entry per command, `workers/scheduler.js` with a single instance.
+On Kubernetes, use a Deployment for the web server and one for the job workers, and either a one-replica Deployment
+running `node workers/scheduler.js` (with the `Recreate` strategy, so two never overlap during a rollout) or a CronJob
+running `node workers/scheduler.js --once` every minute (`concurrencyPolicy: Forbid`).
+
+Delayed jobs and backoffs live in RabbitMQ, not in the worker, so they survive a worker restart. Queues are durable and
+messages persistent; keep the RabbitMQ data on a persistent volume.
 
 ## File uploads
 
@@ -1230,7 +1429,7 @@ node averoa make:crud --help
 | `make:middleware <name>` | `app/Middleware/<name>.js` | `-f, --force` |
 | `make:model <name>` | `app/Models/<name>.js`, added to `app/Models/index.js` | `-t, --table <table>` (default: the lower-cased name), `-f, --force` |
 | `make:helper <name>` | `app/Helpers/<name>.js`, added to the index | `-f, --force` |
-| `make:job <name>` | `app/Jobs/<name>.js`, added to the index | `-f, --force` |
+| `make:job <name>` | `app/Jobs/<name>.js` (a `Job` subclass), added to the index | `-f, --force` |
 | `make:repository <name>` | `app/Repositories/<name>.js`, added to the index | `-f, --force` |
 | `make:strategy <name>` | `app/Strategies/<name>.js`, added to the index | `-f, --force` |
 | `make:crud <tables>` | per table: model, migration, seeder and controller; `crud()` routes in `routes/api.js` | `-i, --init`, `-f, --force` |
@@ -1408,6 +1607,8 @@ default with `SESSION_STORE=redis`), otherwise each instance counts on its own a
       On `SIGTERM` `/ready` answers `503`, then (after `SHUTDOWN_DELAY`) the server stops accepting connections, calls
       `AppProvider.shutdown()`, closes the database, queue and Redis connections, and exits; after `SHUTDOWN_TIMEOUT` ms it
       exits with code 1.
+- [ ] If you use jobs or the schedule: `npm run worker:jobs` running (one or more) and `npm run schedule:run` running
+      **once**, under the same process manager, with `SHUTDOWN_TIMEOUT` longer than your slowest job.
 
 ## Observability
 
@@ -1569,6 +1770,7 @@ npm test
 | `tests/openapi.test.js` | `/api/openapi.json` lists the Teacher CRUD (model schema, filters, bearer auth on writes) and the auth endpoints, hidden columns stay out of the schemas, and `validate()` rejects bad login bodies with `422` |
 | `tests/rate-limit.test.js` | The login limiter (`429` after 5 failures per IP and email, separate counters per account and IP, case-insensitive emails, successes not counted, the per-IP limit) and the global `/api` limiter headers |
 | `tests/observability.test.js` | `/health` and `/ready` on the real app, the `X-Request-Id` header, `requestId` in error responses, and the `AppProvider.health()` hook |
+| `tests/jobs.test.js` | `SendWelcomeEmailJob` and `PruneSoftDeletedJob` with `dispatchSync()` on SQLite, job discovery and the `app/Console/Kernel.js` schedule. With `RABBITMQ_TEST_SERVER` set (for example `amqp://guest:guest@127.0.0.1:5672`), it also runs `workers/jobs.js`, `workers/scheduler.js` and `workers/retry-failed-jobs.js` against that RabbitMQ; otherwise that part is skipped |
 | `tests/unit.test.js` | `PasswordHelper`, `UploadProvider` path sanitising (in a temporary app root), `UploadImageMiddleware` (`req.file`, `req.dataFiles` for `upload` columns, `422` / `400` errors) and the `TOKEN_SECRET` check |
 | `tests/helpers.js` | `setTestEnv()` (sets `NODE_ENV=test`, the test database, random secrets) and a `fetch` client with a timeout |
 
@@ -1619,6 +1821,19 @@ Requires the next `@averoa/core` release (Redis session store and rate limiting)
 - **Redis sessions without code.** `SESSION_STORE=redis` and `REDIS_URL` replace a hand-written `store` in
   `AppProvider.session()` (which still wins when present). Install `redis connect-redis rate-limit-redis`.
 - **`.env.example`** has the new `SESSION_*`, `REDIS_*`, `RATE_LIMIT_*` and `LOGIN_RATE_LIMIT_*` variables.
+
+### Unreleased: jobs and scheduling
+
+Needs the next release of `@averoa/utilities` (the `Job`, `startJobWorker` and `Schedule` exports, added after 2.0.2)
+and of `@averoa/core` (`make:job` generates a `Job` subclass). Changes that affect existing applications:
+
+- **Background jobs and a scheduler.** `npm run worker:jobs`, `npm run schedule:run` and `npm run queue:retry`
+  (`workers/`), the schedule in `app/Console/Kernel.js`, and the sample jobs `SendWelcomeEmailJob` and
+  `PruneSoftDeletedJob`. See [Jobs and scheduling](#jobs-and-scheduling).
+- **`app/Jobs/ExampleJob.js` is gone.** Remove its import if your code used it.
+- **`make:job`** generates a class extending `Job` (exported as the class) instead of an instance with `sample()`.
+- **New dependency** `croner` and new env vars `JOBS_QUEUE`, `JOBS_WORKER_QUEUES`, `JOBS_CONCURRENCY`,
+  `SCHEDULE_TIMEZONE` and `MAIL_FROM` (see `.env.example`).
 
 ### What's new in 2.1.0
 
@@ -1735,6 +1950,16 @@ package are loaded lazily, with a warning, because a top-level import cycle woul
 
 **`401 Unauthorized` from `POST /api/users` or a Teacher write.** These sample routes are behind `AuthMiddleware`. Log
 in with `POST /api/auth/login` and send `Authorization: Bearer <token>`.
+
+**Dispatched jobs never run.** Start `npm run worker:jobs` with the same `RABBITMQ_SERVER` and `JOBS_QUEUE` as the
+web server. A job on a queue the worker does not consume (`static queue`, `JOBS_WORKER_QUEUES`) waits there.
+
+**`unknown job "..."` in the worker log.** The message names a job that the worker's `app/Jobs/index.js` does not
+export, usually a worker running older code than the dispatcher. The message is kept in `<queue>.failed`; deploy the
+worker and run `npm run queue:retry`.
+
+**Scheduled tasks run twice.** More than one `npm run schedule:run` (or a long-running scheduler and a `--once` cron)
+is running. Keep exactly one.
 
 ## Contributing
 
