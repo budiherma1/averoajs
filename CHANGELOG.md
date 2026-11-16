@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.3.0
+
+### Added
+
+- Uses `@averoa/core` 2.2.0 and its new generators: `make:policy`, `make:validator`, `make:migration`
+  (`--create` / `--table`), `make:test` (`--http`) and `make:model --migration --seed`. The README's "CLI generators"
+  section has a walkthrough for a new resource.
+
+### Fixed
+
+- Generated files end with a newline, so `npm run lint` passes on them as generated.
+
 ## 2.2.2
 
 ### Changed
