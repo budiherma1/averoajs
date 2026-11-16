@@ -42,7 +42,8 @@ router.post('/auth/login', 'AuthController@login', loginMiddleware).doc({
 });
 router.middleware(['AuthMiddleware'], () => {
   router.get('/auth/me', 'AuthController@me').doc({ summary: 'The authenticated user', tags: ['Auth'] });
-  router.post('/users', 'SampleController@sampleMethodModelPost'); // returns users' emails and addresses
+  // admin-only sample (verified email + the 'admin' ability): it lists users with their emails
+  router.post('/users', 'SampleController@sampleMethodModelPost', ['EnsureEmailVerified', can('admin')]);
 });
 
 // ---- Authentication flows: registration, refresh tokens, password reset, email verification ----

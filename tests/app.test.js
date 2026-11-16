@@ -99,6 +99,14 @@ describe('sample routes', () => {
     assert.equal(res.body.data, undefined, 'no user data without a token');
   });
 
+  test('POST /api/users is for admins only (a fresh self-registered account gets nothing)', async () => {
+    const reg = await http('POST', '/api/auth/register', { body: { first_name: 'M', email: `member${Date.now()}@example.test`, password: 'password1' } });
+    assert.equal(reg.status, 201, reg.text);
+    const res = await http('POST', '/api/users', { token: reg.body.data.token, body: { first_name: 'A', email: 'a@example.com', password: 'password' } });
+    assert.equal(res.status, 403, res.text);
+    assert.equal(res.body.data, undefined);
+  });
+
   test('POST /api/users validates the body and never returns password hashes', async () => {
     const token = await loginToken();
     const invalid = await http('POST', '/api/users', { token, body: { first_name: 'A', email: 'not-an-email', password: 'password' } });
@@ -109,8 +117,7 @@ describe('sample routes', () => {
     assert.equal(ok.status, 200, ok.text);
     assert.ok(ok.body.data.length > 0);
     for (const user of ok.body.data) {
-      assert.equal(user.password, undefined);
-      assert.equal(user.otp, undefined);
+      assert.deepEqual(Object.keys(user).sort(), ['email', 'first_name', 'id', 'last_name']);
     }
   });
 });

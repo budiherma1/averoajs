@@ -21,8 +21,11 @@ class UserRepository {
   async findByCredentials(email, password) {
     if (typeof email !== 'string' || typeof password !== 'string') return null;
     const user = await this.findActiveByEmail(email);
-    const valid = await PasswordHelper.verify(password, user?.password ?? DUMMY_HASH);
-    return user && valid ? user : null;
+    // a user without a password hash (rows from before the password column, or inserted
+    // without one) cannot log in; the dummy hash only keeps the timing the same
+    const hash = PasswordHelper.isHash(user?.password) ? user.password : DUMMY_HASH;
+    const valid = await PasswordHelper.verify(password, hash);
+    return user && hash !== DUMMY_HASH && valid ? user : null;
   }
 
   /**

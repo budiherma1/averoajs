@@ -117,6 +117,9 @@ class AppProvider {
    * @return  {[Promise<void>]}
    */
   async shutdown() {
+    // emails queued by AuthService after a response (verification, password reset)
+    const { default: AuthService } = await import('#app/Services/AuthService.js');
+    await AuthService.settled();
     // sample
     // await io.close();
   }

@@ -104,6 +104,25 @@ after(async () => {
 });
 
 describe('login and access tokens', () => {
+  test('concurrent registrations with one email create one account', async () => {
+    const email = uniqueEmail('race');
+    const results = await Promise.all(Array.from({ length: 5 }, () => http('POST', '/api/auth/register', {
+      body: { first_name: 'Race', email, password: 'password1' },
+    })));
+    assert.deepEqual(results.map((r) => r.status).sort(), [201, 422, 422, 422, 422]);
+    assert.equal((await DB('users').where('email', email)).length, 1);
+    await AuthService.settled();
+  });
+
+  test('a user without a password hash cannot log in, not even with the timing dummy password', async () => {
+    const email = uniqueEmail('nopass');
+    await DB('users').insert({ first_name: 'No', email, password: null });
+    for (const password of ['averoa-timing-equalizer', '', 'password']) {
+      const res = await http('POST', '/api/auth/login', { body: { email, password } });
+      assert.ok([401, 422].includes(res.status), `${password}: ${res.status} ${res.text}`);
+    }
+  });
+
   test('login answers an access token and a refresh token', async () => {
     const data = await login(DEMO);
     assert.equal(data.type, 'Bearer');
@@ -642,6 +661,14 @@ describe('rate limits on the public auth endpoints', () => {
     const body = await res.json();
     assert.equal(body.status, false);
     assert.equal(body.message, 'Too many requests, please try again later.');
+  });
+
+  test('case and trailing-slash variants of a path share its budget', async () => {
+    const statuses = [];
+    for (const url of ['/api/auth/forgot-password', '/api/auth/Forgot-password', '/api/auth/forgot-password/', '/api/Auth/FORGOT-PASSWORD']) {
+      statuses.push((await http('POST', url, { body: { email: uniqueEmail('limit') } })).status);
+    }
+    assert.deepEqual(statuses, [200, 200, 200, 429]);
   });
 
   test('endpoints have separate budgets', async () => {

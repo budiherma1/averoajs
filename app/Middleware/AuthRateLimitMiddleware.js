@@ -29,9 +29,12 @@ const positiveInt = (name, fallback) => {
 
 const windowMs = positiveInt('AUTH_RATE_LIMIT_WINDOW_MS', 15 * 60 * 1000);
 
-// one counter per endpoint: register and forgot-password do not share a budget
+// one counter per endpoint: register and forgot-password do not share a budget. The key
+// is the matched route, not the raw URL: Express routing ignores case and a trailing
+// slash, so /api/auth/Forgot-password/ must count against /api/auth/forgot-password.
 const endpointKey = (req) => {
-  const path = String(req.originalUrl ?? req.url ?? '').split('?')[0];
+  const route = req.route?.path ?? String(req.path ?? '').split('?')[0];
+  const path = `${req.baseUrl ?? ''}${route}`.toLowerCase().replace(/\/+$/, '') || '/';
   return `${req.method} ${path}:${ipKeyGenerator(req.ip ?? req.socket?.remoteAddress ?? 'unknown')}`;
 };
 

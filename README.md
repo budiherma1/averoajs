@@ -175,7 +175,7 @@ Knex does not create the database itself.
 | `GET` | `/users` | `SampleController@sampleMethodModel` | renders `users.edge` with every user's first name (no emails or addresses) |
 | `GET` | `/teacher` | `TeacherController@index` | renders `teacher.edge` |
 | `GET` | `/api` | `SampleController@sampleMethod` | `{ name, version }` |
-| `POST` | `/api/users` | `SampleController@sampleMethodModelPost` | behind `AuthMiddleware`; validates the body with `Users.validation()`; on success returns the user list (it does not insert) |
+| `POST` | `/api/users` | `SampleController@sampleMethodModelPost` | admins only (`AuthMiddleware`, `EnsureEmailVerified`, `can('admin')`); validates the body with `Users.validation()`; on success returns `id`, names and email of every user (it does not insert) |
 | `POST` | `/api/auth/login` | `AuthController@login` | validates the body with `validate()` (`app/Validators/AuthValidator.js`), issues an access token and a refresh token; behind `LoginRateLimitMiddleware` (`429` after 5 failed attempts per IP and email in 15 minutes) |
 | `GET` | `/api/auth/me` | `AuthController@me` | behind `AuthMiddleware` |
 | `POST` | `/api/auth/register`, `/api/auth/refresh`, `/api/auth/logout`, `/api/auth/logout-all` | `AuthController` | see [Authentication](#authentication) |
@@ -186,7 +186,7 @@ Knex does not create the database itself.
 | `GET` | `/api/v2/test`, `/api/v2/test/otherprefix` | `SampleController@sampleMethodView` | nested `prefix()` example |
 | `GET` | `/api/openapi.json`, `/api/docs` | `@averoa/core` | OpenAPI document and Swagger UI; only when `OPENAPI_ENABLED` (default: development/test). See [API documentation](#api-documentation) |
 
-These routes are samples. `/api/auth/me`, `POST /api/users` and the Teacher writes require a JWT (see
+These routes are samples. `/api/auth/me` and the Teacher writes require a JWT, and `POST /api/users` an admin's (see
 [Authentication](#authentication)); the rest are public. Remove or protect them before you deploy (see
 [Production checklist](#production-checklist)).
 
@@ -1008,13 +1008,17 @@ live refresh token, so logging out takes effect at once rather than when the acc
 - **Rotation.** Every refresh revokes the presented token and issues the next one of the same family.
 - **Reuse detection.** Presenting a token that was already rotated means two parties hold it (the client and an
   attacker), so the whole family is revoked: both must log in again. Two concurrent refreshes with the same token are
-  handled the same way: at most one succeeds.
+  handled the same way, so clients must refresh from one place: share the refresh in a single promise (or a lock)
+  across browser tabs and retries, or the user is signed out.
 - **Logout everywhere.** `logout-all` and a password reset increment `token_version` and revoke every refresh token.
   Call `AuthService.invalidateSessions(userId)` after changing a password or an email address in your own code.
 - **Storage.** Refresh tokens and the reset / verification tokens are 256-bit random values; only their SHA-256 hash
   is stored (`refresh_tokens`, `user_tokens`), so a database leak does not reveal usable tokens. Lookups go through the
-  hash, so no token is ever compared in application code. Expired rows can be removed with
-  `RefreshTokenRepository.deleteExpired()` and `UserTokenRepository.deleteExpired()` from a scheduled job.
+  hash, so no token is ever compared in application code. `app/Console/Kernel.js` deletes expired rows daily at 03:30
+  (`npm run schedule:run`).
+- **Emails after the response.** Verification and reset emails are sent after the response, so neither a slow SMTP
+  server nor the timing reveals anything. `AppProvider.shutdown()` waits for the pending ones (`AuthService.settled()`)
+  so a deploy does not drop them; a failed send is logged, not retried.
 
 | Response | When |
 | --- | --- |
@@ -1776,8 +1780,8 @@ default with `SESSION_STORE=redis`), otherwise each instance counts on its own a
       known password.
 - [ ] `FRONTEND_URL`, `MAIL_FROM_ADDRESS` and the SMTP settings set, so verification and reset emails are delivered
       with working links. Behind a proxy, `TRUST_PROXY` set so the auth rate limits see client IPs, not the proxy's.
-- [ ] Sample routes (`/users`, `POST /api/users`, `/teacher`, `/api/teachers`, `/api/v2/*`) removed or protected. Only
-      `POST /api/users` and the Teacher writes require a JWT; `/users` and the Teacher reads are public.
+- [ ] Sample routes (`/users`, `POST /api/users`, `/teacher`, `/api/teachers`, `/api/v2/*`) removed or protected. The
+      Teacher writes require a JWT and `POST /api/users` an admin; `/users` and the Teacher reads are public.
 - [ ] `OPENAPI_ENABLED` unset or `false`, unless the API description should be public (it is off by default outside
       development and test).
 - [ ] `storages/upload` writable and persistent. With file logging, `storages/logs` too: logs are appended to
@@ -1996,13 +2000,14 @@ The `Dockerfile`'s last stage is the production image:
 
 ```bash
 docker build -t averoajs .
-docker run -d --name averoajs -p 3000:3000 \
+docker run -d --name averoajs -p 3000:3000 -e APP_PORT=3000 \
   -e TOKEN_SECRET=... -e SESSION_SECRET=... \
   -e DB_HOST=... -e DB_USER=... -e DB_PASS=... -e DB_NAME=... \
   -v averoajs-uploads:/app/storages/upload \
   -v averoajs-logs:/app/storages/logs \
   averoajs
 docker run --rm --env-file .env.production averoajs npm run migrate:up   # as a release step
+# an env file copied from .env.example sets APP_PORT=8888: map -p 3000:8888 then, or set APP_PORT=3000 in it
 ```
 
 - Multi-stage build on `node:22.23.4-alpine3.23` (exact tag; override with `--build-arg NODE_IMAGE=...`, for example
@@ -2012,8 +2017,9 @@ docker run --rm --env-file .env.production averoajs npm run migrate:up   # as a 
   on that port, so the container is unhealthy while the database or another readiness check fails.
 - `CMD ["node", "server.js"]` runs Node.js directly, so `SIGTERM` reaches the app's graceful shutdown.
 - `.env` is never copied into the image (`.dockerignore`); pass settings as environment variables or secrets.
-- In production `Log` writes to `storages/logs/averoa.log`, not to the console: mount `storages/logs`, or change
-  the logger if your platform collects stdout.
+- The image sets `LOG_CHANNEL=stdout` and `LOG_FORMAT=json`: the application and access logs are JSON lines on stdout
+  for the platform's log collector, and nothing is written to `storages/logs` (the volume above is only needed with
+  `LOG_CHANNEL=file` or `both`).
 - `npm run seed:run` does not work in this image: the seeders need `@faker-js/faker`, a devDependency. Seed from the
   development image instead, and never against production data.
 - `@aws-sdk/client-s3` (an optional dependency) is included, so `UPLOAD_DRIVER=s3` works without a rebuild.
@@ -2107,6 +2113,23 @@ Requires the next `@averoa/core` release (Redis session store and rate limiting)
 - **Redis sessions without code.** `SESSION_STORE=redis` and `REDIS_URL` replace a hand-written `store` in
   `AppProvider.session()` (which still wins when present). Install `redis connect-redis rate-limit-redis`.
 - **`.env.example`** has the new `SESSION_*`, `REDIS_*`, `RATE_LIMIT_*` and `LOGIN_RATE_LIMIT_*` variables.
+
+### Unreleased: authentication
+
+Changes that affect existing applications and their clients:
+
+- **Everyone logs in again.** Access tokens now carry a token version and a session id; tokens issued by 2.1.0 are
+  rejected with `401`.
+- **Token response.** Login also returns `refresh_token` and `refresh_expires_in`; `expires_in` is a number of seconds
+  instead of the `TOKEN_EXPIRES_IN` string. Without `JWT_ACCESS_TTL` / `TOKEN_EXPIRES_IN`, access tokens last 15
+  minutes instead of 1 hour.
+- **`TOKEN_EXPIRES_IN` format.** Only seconds (`900`) or a number with a unit (`15m`, `7d`); jsonwebtoken strings such
+  as `1 day` or `1.5h` stop the app at startup.
+- **Migrations.** `npm run migrate:up` adds `users.email_verified_at`, `token_version`, `is_admin`, the
+  `refresh_tokens` and `user_tokens` tables, and a unique index on `users.email`; that migration stops with a list of
+  the addresses to fix when two users share one. Users without a password hash can no longer log in.
+- **`POST /api/users`** is for verified admins only (`403` for everyone else).
+- **Mail sender.** New `MAIL_FROM_ADDRESS` / `MAIL_FROM_NAME` set the sender of every email the app sends.
 
 ### Unreleased: jobs and scheduling
 
@@ -2235,7 +2258,8 @@ package are loaded lazily, with a warning, because a top-level import cycle woul
 `@averoa/utilities/paths` in config files, or `await getDB()` before the first query.
 
 **`401 Unauthorized` from `POST /api/users` or a Teacher write.** These sample routes are behind `AuthMiddleware`. Log
-in with `POST /api/auth/login` and send `Authorization: Bearer <token>`.
+in with `POST /api/auth/login` and send `Authorization: Bearer <token>`. `POST /api/users` then answers `403` unless the
+user is an admin with a verified email (the seeded `demo@averoa.test` is).
 
 **Dispatched jobs never run.** Start `npm run worker:jobs` with the same `RABBITMQ_SERVER` and `JOBS_QUEUE` as the
 web server. A job on a queue the worker does not consume (`static queue`, `JOBS_WORKER_QUEUES`) waits there.

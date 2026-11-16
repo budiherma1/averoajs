@@ -21,13 +21,14 @@ class SampleController {
     res.render('users', { data: users });
   }
 
-  // behind AuthMiddleware (routes/api.js): the list holds every user's email and address
+  // admins only (routes/api.js: AuthMiddleware, EnsureEmailVerified, can('admin')):
+  // validates a user-shaped body, then lists users with an explicit column list
   async sampleMethodModelPost(req, res) {
     const validation = Users.validation(req.body ?? {});
     if (validation?.status === false) return res.status(422).json(validation);
 
-    // `password` (and `otp`) are hidden: they never reach the response
-    const users = await Users.query();
+    // never select('*') here: addresses, admin flags and token columns stay out
+    const users = await Users.query().select('id', 'first_name', 'last_name', 'email').whereNull('deleted_at');
     return res.json({ status: true, data: users });
   }
 

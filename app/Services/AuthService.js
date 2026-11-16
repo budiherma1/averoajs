@@ -15,6 +15,10 @@ const REGISTER_FIELDS = ['first_name', 'last_name', 'email', 'password', 'addres
 const fail = (statusCode, message, extra = {}) => ({
   status: false, message, statusCode, ...extra,
 });
+/** Duplicate key on MySQL, PostgreSQL or SQLite (objection wraps it in UniqueViolationError). */
+const isUniqueViolation = (err) => err?.name === 'UniqueViolationError'
+  || ['ER_DUP_ENTRY', '23505', 'SQLITE_CONSTRAINT_UNIQUE'].includes(err?.code ?? err?.nativeError?.code);
+
 const invalidField = (column, message) => ({
   status: false, data: { column, message }, statusCode: 422,
 });
@@ -173,8 +177,15 @@ class AuthService {
       return invalidField('email', ['email is already registered']);
     }
 
-    // $beforeInsert hashes the password and normalizes the email
-    const user = await Users.query().insertAndFetch(input);
+    // $beforeInsert hashes the password and normalizes the email. The unique index on
+    // users.email settles concurrent registrations that all passed isDuplicate().
+    let user;
+    try {
+      user = await Users.query().insertAndFetch(input);
+    } catch (err) {
+      if (isUniqueViolation(err)) return invalidField('email', ['email is already registered']);
+      throw err;
+    }
     this.defer('verification email', () => this.sendVerificationEmail(user));
     return { status: true, data: { user, ...(await this.issueTokens(user)) } };
   }

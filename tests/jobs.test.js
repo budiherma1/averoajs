@@ -110,7 +110,7 @@ describe('job registry and schedule', () => {
   test('app/Console/Kernel.js prunes soft-deleted rows daily at 03:00', async () => {
     const { loadSchedule } = await import('@averoa/utilities/Schedule.js');
     const schedule = await loadSchedule();
-    assert.deepEqual(schedule.events.map((e) => [e.description, e.expression]), [['PruneSoftDeletedJob', '0 3 * * *']]);
+    assert.deepEqual(schedule.events.map((e) => [e.description, e.expression]), [['PruneSoftDeletedJob', '0 3 * * *'], ['delete expired auth tokens', '30 3 * * *']]);
 
     const fake = utilities.fakeJobs();
     try {

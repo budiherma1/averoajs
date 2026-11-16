@@ -1,4 +1,5 @@
 import { PruneSoftDeletedJob } from '#jobs';
+import { RefreshTokenRepository, UserTokenRepository } from '#repositories';
 
 /**
  * The task schedule, run by `npm run schedule:run` (workers/scheduler.js).
@@ -16,4 +17,11 @@ import { PruneSoftDeletedJob } from '#jobs';
 export default function kernel(schedule) {
   // permanently delete rows soft-deleted more than 30 days ago
   schedule.job(PruneSoftDeletedJob, { days: 30 }).dailyAt('03:00');
+
+  // every refresh adds a refresh_tokens row: drop expired refresh, reset and
+  // verification tokens
+  schedule.call(async () => {
+    await RefreshTokenRepository.deleteExpired();
+    await UserTokenRepository.deleteExpired();
+  }, 'delete expired auth tokens').dailyAt('03:30').withoutOverlapping();
 }
