@@ -1,3 +1,4 @@
+import { DB } from '@averoa/utilities';
 import { Users } from '#models';
 import { PasswordHelper } from '#helpers';
 
@@ -22,6 +23,30 @@ class UserRepository {
     const user = await this.findActiveByEmail(email);
     const valid = await PasswordHelper.verify(password, user?.password ?? DUMMY_HASH);
     return user && valid ? user : null;
+  }
+
+  /**
+   * Increments `token_version`: every access token issued before stops working
+   * (see JwtStrategy). Accepts a transaction as `db`.
+   */
+  bumpTokenVersion(id, db = DB) {
+    return db(Users.tableName).where('id', id).update({ token_version: db.raw('?? + 1', ['token_version']), updated_at: new Date() });
+  }
+
+  /** Stores an already hashed password (PasswordHelper.hash) and invalidates every access token. */
+  updatePasswordHash(id, hash, db = DB) {
+    return db(Users.tableName).where('id', id).update({
+      password: hash,
+      token_version: db.raw('?? + 1', ['token_version']),
+      updated_at: new Date(),
+    });
+  }
+
+  /** Sets `email_verified_at` (once). Resolves true when it was not verified before. */
+  async markEmailVerified(id, db = DB) {
+    const updated = await db(Users.tableName).where('id', id).whereNull('email_verified_at')
+      .update({ email_verified_at: new Date(), updated_at: new Date() });
+    return Number(updated) === 1;
   }
 }
 
