@@ -32,26 +32,6 @@ test('GET /api/openapi.json describes the app (AppProvider.openapi sets the titl
   assert.equal(doc.info.version, version);
 });
 
-test('teachers CRUD is documented with the model schema, filters and auth on writes', () => {
-  const list = doc.paths['/api/teachers'].get;
-  assert.equal(list.summary, 'List Teacher');
-  assert.ok(list.parameters.some((p) => p.name === 'orderBy'));
-  assert.ok(list.parameters.some((p) => p.name === '$relations'));
-  assert.equal(list.security, undefined, 'reads are public');
-  assert.deepEqual(list.responses[200].content['application/json'].schema.properties.data.items, { $ref: '#/components/schemas/Teacher' });
-
-  assert.deepEqual(Object.keys(doc.paths['/api/teachers/{id}']).sort(), ['delete', 'get', 'put']);
-  for (const op of [doc.paths['/api/teachers'].post, doc.paths['/api/teachers/{id}'].put, doc.paths['/api/teachers/{id}'].delete]) {
-    assert.deepEqual(op.security, [{ bearerAuth: [] }]);
-  }
-  assert.deepEqual(doc.paths['/api/teachers'].post.requestBody.content['application/json'].schema, { $ref: '#/components/schemas/TeacherCreate' });
-
-  const teacher = doc.components.schemas.Teacher.properties;
-  assert.deepEqual(teacher.id, { type: 'integer' });
-  assert.deepEqual(teacher.teacher_name, { type: ['string', 'null'] });
-  assert.deepEqual(doc.components.schemas.TeacherCreate.required, ['teacher_name', 'type']);
-});
-
 test('auth endpoints: login body from validate(), me behind the bearer scheme', () => {
   const login = doc.paths['/api/auth/login'].post;
   assert.equal(login.summary, 'Log in and get a JWT');

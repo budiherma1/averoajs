@@ -2,7 +2,7 @@
  * Lets the request through only for a user whose email address is verified.
  * Put it after AuthMiddleware:
  *
- *   router.post('/', 'TeacherController@create', ['AuthMiddleware', 'EnsureEmailVerified']);
+ *   router.post('/', 'PostController@create', ['AuthMiddleware', 'EnsureEmailVerified']);
  *
  * 401 without a user, 403 { status: false, message, code: 'EMAIL_NOT_VERIFIED' } otherwise.
  */

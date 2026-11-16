@@ -67,7 +67,7 @@ class Users extends Model {
     },
   };
 
-  /** Role flag of the authorization examples (TeacherPolicy). */
+  /** Role flag: admins pass every policy's before() and the 'admin' ability (AuthProvider). */
   isAdmin() {
     return Number(this.is_admin) === 1;
   }

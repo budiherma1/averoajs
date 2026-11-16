@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.5.0
+
+### Added
+
+- **Starters** for `npm create averoa` (create-averoa 1.1.0 and later, `--starter <name>` or the prompt):
+  - `minimal`: authentication, users and the framework setup without the example models, routes, views and tests.
+  - `dashboard`: `minimal` plus server-rendered admin pages with a session login (CSRF, login rate limit), an
+    overview with user numbers, a searchable users list for admins, profile and password pages, and their tests.
+
+  They live in `starters/` (see `starters/README.md`); a new CI job creates an app from each one and runs its tests,
+  lint and generators.
+
+### Changed
+
+- The `/api/auth/*` routes moved from `routes/api.js` to `routes/auth.js`, which `routes/api.js` mounts with
+  `auth(router)`. The routes themselves are unchanged.
+- The example tests (sample routes, Teacher CRUD, `EnsureEmailVerified` on `POST /api/teachers`, `TeacherPolicy`,
+  the Teacher OpenAPI document) moved to `tests/examples.test.js`; the `PruneSoftDeletedJob` tests use `users`.
+- `GET /api` answers `{ name }` without the out-of-date `version`.
+- Comments and stubs that pointed at the Teacher example now use a generic `Post` example.
+
 ## 2.4.0
 
 ### Changed

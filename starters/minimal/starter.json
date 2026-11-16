@@ -1,0 +1,20 @@
+{
+  "description": "Authentication, users and the framework setup, without the example models, routes and views",
+  "remove": [
+    "app/Controllers/SampleController.js",
+    "app/Controllers/TeacherController.js",
+    "app/Models/Teacher.js",
+    "app/Models/Rooms.js",
+    "app/Policies/TeacherPolicy.js",
+    "app/Helpers/ExampleHelper.js",
+    "app/Repositories/ExampleRepository.js",
+    "routes/v2",
+    "resources/views/teacher.edge",
+    "resources/views/users.edge",
+    "database/migrations/1659087445436_Teacher.js",
+    "database/migrations/1659186271721_Rooms.js",
+    "database/seeds/2000-TeacherSeed.js",
+    "database/seeds/3000-RoomsSeed.js",
+    "tests/examples.test.js"
+  ]
+}

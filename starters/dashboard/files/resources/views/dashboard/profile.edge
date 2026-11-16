@@ -1,0 +1,61 @@
+@component('components/layout', { title, user, csrfToken, active: 'profile' })
+  @if(status)
+    <div class="alert alert-success" role="status"><i class="bi bi-check-circle"></i> {{ status }}</div>
+  @end
+  <div class="row g-4">
+    <div class="col-lg-6">
+      <div class="card"><div class="card-body">
+        <h2 class="h5 mb-3">Profile</h2>
+        <form method="post" action="/dashboard/profile" novalidate>
+          <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+          <div class="mb-3">
+            <label class="form-label" for="email">Email</label>
+            <input class="form-control" id="email" value="{{ user.email }}" disabled>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="first_name">First name</label>
+            <input class="form-control {{ errors.first_name ? 'is-invalid' : '' }}" id="first_name" name="first_name" value="{{ values.first_name }}" maxlength="50" required>
+            @if(errors.first_name)
+              <div class="invalid-feedback">First name {{ errors.first_name }}</div>
+            @end
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="last_name">Last name</label>
+            <input class="form-control {{ errors.last_name ? 'is-invalid' : '' }}" id="last_name" name="last_name" value="{{ values.last_name }}" maxlength="50">
+            @if(errors.last_name)
+              <div class="invalid-feedback">Last name {{ errors.last_name }}</div>
+            @end
+          </div>
+          <button class="btn btn-primary" type="submit">Save</button>
+        </form>
+      </div></div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card"><div class="card-body">
+        <h2 class="h5 mb-3"><i class="bi bi-key"></i> Password</h2>
+        <form method="post" action="/dashboard/password" novalidate>
+          <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+          <div class="mb-3">
+            <label class="form-label" for="current_password">Current password</label>
+            <input class="form-control {{ errors.current_password ? 'is-invalid' : '' }}" id="current_password" name="current_password" type="password" autocomplete="current-password" required>
+            @if(errors.current_password)
+              <div class="invalid-feedback">Current password {{ errors.current_password }}</div>
+            @end
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="new_password">New password</label>
+            <input class="form-control {{ errors.new_password ? 'is-invalid' : '' }}" id="new_password" name="new_password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+            @if(errors.new_password)
+              <div class="invalid-feedback">New password {{ errors.new_password }}</div>
+            @end
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="new_password_confirmation">Repeat the new password</label>
+            <input class="form-control" id="new_password_confirmation" name="new_password_confirmation" type="password" autocomplete="new-password" required>
+          </div>
+          <button class="btn btn-primary" type="submit">Change password</button>
+        </form>
+      </div></div>
+    </div>
+  </div>
+@end

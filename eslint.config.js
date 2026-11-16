@@ -14,6 +14,8 @@ export default [
       'resources/assets/**',
       'storages/**',
       'coverage/**',
+      // starter overlays only resolve inside a generated app; CI lints each starter there
+      'starters/**',
     ],
   },
 

@@ -77,23 +77,20 @@ describe('SendWelcomeEmailJob', () => {
 describe('PruneSoftDeletedJob', () => {
   test('hard-deletes rows soft-deleted more than `days` ago, in every model with timestamps', async () => {
     const { PruneSoftDeletedJob } = jobs;
-    const [old, recent, live] = await DB('teacher').orderBy('id').limit(3).pluck('id');
-    await DB('teacher').where({ id: old }).update({ deleted_at: new Date(Date.now() - 40 * DAY) });
-    await DB('teacher').where({ id: recent }).update({ deleted_at: new Date(Date.now() - 5 * DAY) });
-    const rooms = await DB('rooms').count({ n: '*' }).first();
+    // seeded users without tokens (ids 1 and 2 are used by the welcome mail test above)
+    const [old, recent, live] = await DB('users').where('id', '>', 2).orderBy('id').limit(3).pluck('id');
+    await DB('users').where({ id: old }).update({ deleted_at: new Date(Date.now() - 40 * DAY) });
+    await DB('users').where({ id: recent }).update({ deleted_at: new Date(Date.now() - 5 * DAY) });
 
     const result = await PruneSoftDeletedJob.dispatchSync({ days: 30 });
-    assert.equal(result.Teacher, 1);
-    assert.equal(result.Rooms, 0);
-    assert.ok('Users' in result);
-    const left = await DB('teacher').whereIn('id', [old, recent, live]).pluck('id');
+    assert.equal(result.Users, 1);
+    const left = await DB('users').whereIn('id', [old, recent, live]).pluck('id');
     assert.deepEqual(left.sort(), [recent, live].sort());
-    assert.deepEqual(await DB('rooms').count({ n: '*' }).first(), rooms);
   });
 
   test('only touches the models it is given; rejects unknown models and bad days', async () => {
     const { PruneSoftDeletedJob } = jobs;
-    assert.deepEqual(await PruneSoftDeletedJob.dispatchSync({ models: ['Rooms'] }), { Rooms: 0 });
+    assert.deepEqual(await PruneSoftDeletedJob.dispatchSync({ models: ['Users'] }), { Users: 0 });
     await assert.rejects(PruneSoftDeletedJob.dispatchSync({ models: ['users; drop table users'] }), /unknown model/);
     await assert.rejects(PruneSoftDeletedJob.dispatchSync({ models: ['constructor'] }), /unknown model/);
     await assert.rejects(PruneSoftDeletedJob.dispatchSync({ days: 0 }), /invalid days/);
@@ -161,18 +158,18 @@ describe('workers on RabbitMQ', { skip: !amqpUrl && 'set RABBITMQ_TEST_SERVER to
 
   test('npm run worker:jobs runs a dispatched job and stops cleanly on SIGTERM', async () => {
     const { PruneSoftDeletedJob } = jobs;
-    const [id] = await DB('rooms').orderBy('id').limit(1).pluck('id');
-    await DB('rooms').where({ id }).update({ deleted_at: new Date(Date.now() - 90 * DAY) });
+    const [id] = await DB('users').where('id', '>', 5).orderBy('id').limit(1).pluck('id');
+    await DB('users').where({ id }).update({ deleted_at: new Date(Date.now() - 90 * DAY) });
 
     const worker = startScript('workers/jobs.js', /JobWorker: consuming/);
     try {
       await worker.started;
-      await PruneSoftDeletedJob.dispatch({ days: 30, models: ['Rooms'] });
+      await PruneSoftDeletedJob.dispatch({ days: 30, models: ['Users'] });
       const end = Date.now() + 10_000;
-      while ((await DB('rooms').where({ id }).first()) && Date.now() < end) {
+      while ((await DB('users').where({ id }).first()) && Date.now() < end) {
         await new Promise((r) => { setTimeout(r, 50); });
       }
-      assert.equal(await DB('rooms').where({ id }).first(), undefined, worker.output());
+      assert.equal(await DB('users').where({ id }).first(), undefined, worker.output());
     } finally {
       worker.child.kill('SIGTERM');
     }

@@ -1,7 +1,7 @@
 // Created by `npm run seed:make`. ES module: export `seed`.
-// Seeds run in file name order. To seed from a model's `static column`, see
-// database/seeds/2000-TeacherSeed.js:
-//   export const seed = Teacher.seeder.bind(Teacher, 10);
+// Seeds run in file name order. To seed from a model's `static column`, use
+// `node averoa make:model Post -s`, which writes:
+//   export const seed = Post.seeder.bind(Post, 10);
 
 /** @param {import('knex').Knex} knex */
 export async function seed(knex) {

@@ -1,8 +1,8 @@
 // Created by `npm run migrate:make`. ES module: export `up` and `down`.
-// To build a table from a model's `static column` instead, see
-// database/migrations/1659087445436_Teacher.js:
-//   export const up = Teacher.migrationUp.bind(Teacher);
-//   export const down = Teacher.migrationDown.bind(Teacher);
+// To build a table from a model's `static column` instead, use
+// `node averoa make:model Post -m`, which writes:
+//   export const up = Post.migrationUp.bind(Post);
+//   export const down = Post.migrationDown.bind(Post);
 
 /** @param {import('knex').Knex} knex */
 export async function up(knex) {

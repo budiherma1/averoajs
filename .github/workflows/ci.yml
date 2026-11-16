@@ -112,3 +112,38 @@ jobs:
         run: npm install --no-save --no-audit --no-fund pg@^8.23.1
       - name: Test
         run: npm test
+
+  # Every starter (starters/<name>): scaffolded with create-averoa from this checkout,
+  # then the generated app's own tests and lint, plus a generator run.
+  starters:
+    name: Starter ${{ matrix.starter }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        starter: [minimal, dashboard]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+      - name: Create the app
+        env:
+          STARTER: ${{ matrix.starter }}
+        run: npx --yes create-averoa@^1.1.0 "$RUNNER_TEMP/app" --template . --starter "$STARTER" --no-git --yes
+      - name: Test
+        working-directory: ${{ runner.temp }}/app
+        run: npm test
+      - name: Lint
+        working-directory: ${{ runner.temp }}/app
+        run: npm run lint
+      - name: Generators
+        working-directory: ${{ runner.temp }}/app
+        run: |
+          node averoa.js make:crud books
+          node averoa.js make:test books --http
+          npm run lint
+          npm test

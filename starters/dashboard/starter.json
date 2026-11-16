@@ -1,0 +1,7 @@
+{
+  "description": "Admin dashboard: session login, overview, users list for admins, profile and password pages",
+  "extends": "minimal",
+  "remove": [
+    "resources/views/welcome.edge"
+  ]
+}

@@ -1,0 +1,46 @@
+{{--
+  Page shell of the dashboard. Props: title, user (signed-in user or null),
+  csrfToken, active (nav item: home, users, profile). The page body is the main slot.
+--}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title ? title + ' · ' : '' }}Dashboard</title>
+  <link rel="stylesheet" href="/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/css/bootstrap-icons.css">
+  <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+@if(user)
+  <div class="dash">
+    <nav class="dash-nav" aria-label="Main">
+      <a class="dash-brand" href="/dashboard"><i class="bi bi-grid-fill"></i> Dashboard</a>
+      <a class="dash-link {{ active === 'home' ? 'is-active' : '' }}" href="/dashboard"><i class="bi bi-house-door"></i> Overview</a>
+      @if(user.isAdmin())
+        <a class="dash-link {{ active === 'users' ? 'is-active' : '' }}" href="/dashboard/users"><i class="bi bi-people"></i> Users</a>
+      @end
+      <a class="dash-link {{ active === 'profile' ? 'is-active' : '' }}" href="/dashboard/profile"><i class="bi bi-person-circle"></i> Profile</a>
+    </nav>
+    <div class="dash-body">
+      <header class="dash-header">
+        <h1 class="h4 mb-0">{{ title }}</h1>
+        <form method="post" action="/logout" class="d-flex align-items-center gap-3">
+          <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+          <span class="text-muted small">{{ user.email }}</span>
+          <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="bi bi-box-arrow-right"></i> Log out</button>
+        </form>
+      </header>
+      <main class="dash-main">
+        {{{ await $slots.main() }}}
+      </main>
+    </div>
+  </div>
+@else
+  <main class="auth">
+    {{{ await $slots.main() }}}
+  </main>
+@end
+</body>
+</html>

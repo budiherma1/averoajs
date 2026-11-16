@@ -3,7 +3,7 @@ import { PasswordHelper } from '#helpers';
 
 // Development data only. Every seeded user has the password "password".
 export const DEMO_USER = { email: 'demo@averoa.test', password: 'password' };
-// a verified account without the admin role (TeacherPolicy: may only change its own teachers)
+// a verified account without the admin role
 export const MEMBER_USER = { email: 'member@averoa.test', password: 'password' };
 
 export async function seed(knex) {

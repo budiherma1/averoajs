@@ -1,0 +1,48 @@
+@component('components/layout', { title, user, csrfToken, active: 'users' })
+  <form method="get" action="/dashboard/users" class="d-flex gap-2 mb-3" role="search">
+    <input class="form-control" name="q" value="{{ q }}" placeholder="Search by name or email" aria-label="Search">
+    <button class="btn btn-outline-primary" type="submit"><i class="bi bi-search"></i></button>
+  </form>
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle">
+        <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Joined</th></tr></thead>
+        <tbody>
+          @each(person in users)
+            <tr>
+              <td>{{ person.name }}</td>
+              <td>{{ person.email }}</td>
+              <td>
+                @if(person.admin)
+                  <span class="badge bg-primary"><i class="bi bi-shield-check"></i> Admin</span>
+                @end
+                @if(person.verified)
+                  <span class="badge bg-success">Verified</span>
+                @else
+                  <span class="badge bg-secondary">Unverified</span>
+                @end
+              </td>
+              <td class="text-muted small">{{ person.joined }}</td>
+            </tr>
+          @else
+            <tr><td colspan="4" class="text-muted">No users found.</td></tr>
+          @end
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+      <span class="text-muted small">{{ total }} user(s)</span>
+      @if(pages > 1)
+        <nav aria-label="Pages" class="d-flex gap-2">
+          @if(previous)
+            <a class="btn btn-sm btn-outline-secondary" href="{{ previous }}">Previous</a>
+          @end
+          <span class="small align-self-center">Page {{ page }} of {{ pages }}</span>
+          @if(next)
+            <a class="btn btn-sm btn-outline-secondary" href="{{ next }}">Next</a>
+          @end
+        </nav>
+      @end
+    </div>
+  </div>
+@end

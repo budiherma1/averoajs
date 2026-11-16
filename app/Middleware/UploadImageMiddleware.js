@@ -16,8 +16,8 @@ const MAX_FILE_SIZE = Number(process.env.UPLOAD_MAX_FILE_SIZE) || 2 * 1024 * 102
  * Use it on plain post/put/patch routes. `postForm`/`putForm`/`patchForm` routes parse
  * the multipart body themselves, after every middleware, so don't combine the two.
  *
- *   router.post('/', 'TeacherController@create', ['UploadImageMiddleware']);  // field `image`
- *   router.post('/', 'TeacherController@create', [new UploadImageMiddleware('photo')]);
+ *   router.post('/', 'PostController@create', ['UploadImageMiddleware']);  // field `image`
+ *   router.post('/', 'PostController@create', [new UploadImageMiddleware('photo')]);
  */
 export class UploadImageMiddleware {
   constructor(field = 'image') {

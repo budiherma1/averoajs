@@ -116,7 +116,24 @@ structure over assembling middleware by hand for every new service.
 
 ## Quick start
 
-The steps below use SQLite, so no database server is needed.
+**Starting a new project?** Use create-averoa: it downloads the latest release, writes `.env` with fresh secrets and
+installs the dependencies. Pick a starter with `--starter`, or answer the prompt:
+
+```bash
+npm create averoa@latest my-app                          # full boilerplate, with the examples below
+npm create averoa@latest my-app -- --starter minimal     # auth and users, no examples
+npm create averoa@latest my-app -- --starter dashboard   # minimal + admin pages with a session login
+```
+
+| Starter | What you get |
+| --- | --- |
+| (none) | This repository as it is: authentication, users, and the example Teacher / Rooms models, routes, views, policy and tests described below |
+| `minimal` | Authentication (JWT API, registration, refresh tokens, password reset, email verification), users, jobs, scheduler, mail, uploads and every setting, without the examples. `GET /` renders `welcome.edge`, `GET /api` answers `{ status, name }` |
+| `dashboard` | `minimal` plus server-rendered admin pages: session login at `/login` (CSRF, login rate limit), `/dashboard` with user numbers for admins, a searchable users list for admins, profile and password pages, and tests for all of them |
+
+Starters live in [`starters/`](starters/README.md); CI creates an app from each one and runs its tests and lint.
+
+The steps below set up this repository itself, with SQLite, so no database server is needed.
 
 ```bash
 git clone https://github.com/budiherma1/averoajs.git
@@ -153,7 +170,7 @@ Open <http://localhost:8888> for the welcome page, or call the API:
 
 ```bash
 curl http://localhost:8888/api
-# {"name":"Averoa","version":"2.2.2"}
+# {"name":"Averoa"}
 
 curl -X POST http://localhost:8888/api/auth/login \
   -H 'content-type: application/json' \
@@ -175,7 +192,7 @@ Knex does not create the database itself.
 | `GET` | `/` | `SampleController@sampleMethodView` | renders `welcome.edge` |
 | `GET` | `/users` | `SampleController@sampleMethodModel` | renders `users.edge` with every user's first name (no emails or addresses) |
 | `GET` | `/teacher` | `TeacherController@index` | renders `teacher.edge` |
-| `GET` | `/api` | `SampleController@sampleMethod` | `{ name, version }` |
+| `GET` | `/api` | `SampleController@sampleMethod` | `{ name }` |
 | `POST` | `/api/users` | `SampleController@sampleMethodModelPost` | admins only (`AuthMiddleware`, `EnsureEmailVerified`, `can('admin')`); validates the body with `Users.validation()`; on success returns `id`, names and email of every user (it does not insert) |
 | `POST` | `/api/auth/login` | `AuthController@login` | validates the body with `validate()` (`app/Validators/AuthValidator.js`), issues an access token and a refresh token; behind `LoginRateLimitMiddleware` (`429` after 5 failed attempts per IP and email in 15 minutes) |
 | `GET` | `/api/auth/me` | `AuthController@me` | behind `AuthMiddleware` |
@@ -187,7 +204,8 @@ Knex does not create the database itself.
 | `GET` | `/api/v2/test`, `/api/v2/test/otherprefix` | `SampleController@sampleMethodView` | nested `prefix()` example |
 | `GET` | `/api/openapi.json`, `/api/docs` | `@averoa/core` | OpenAPI document and Swagger UI; only when `OPENAPI_ENABLED` (default: development/test). See [API documentation](#api-documentation) |
 
-These routes are samples. `/api/auth/me` and the Teacher writes require a JWT, and `POST /api/users` an admin's (see
+The `/api/auth/*` routes are declared in `routes/auth.js`, which `routes/api.js` mounts with `auth(router)`; the
+others are the examples that the `minimal` starter removes. `/api/auth/me` and the Teacher writes require a JWT, and `POST /api/users` an admin's (see
 [Authentication](#authentication)); the rest are public. Remove or protect them before you deploy (see
 [Production checklist](#production-checklist)).
 
@@ -222,11 +240,13 @@ averoajs/
 │   └── views/                Edge templates
 ├── routes/
 │   ├── api.js                mounted at /api
+│   ├── auth.js               the /api/auth/* routes, mounted by api.js
 │   ├── web.js                mounted at /
-│   └── v2/                   route modules included by api.js
+│   └── v2/                   route modules included by api.js (examples)
 ├── scripts/
 │   ├── link-local.mjs        install local checkouts of the framework packages
 │   └── run-tests.mjs         npm test: runs tests/*.test.js on every platform
+├── starters/                 create-averoa starters (minimal, dashboard); not copied into apps
 ├── storages/
 │   ├── logs/                 averoa.log, access.log, error.log
 │   └── upload/               uploaded files (UPLOAD_DRIVER=local), served at /upload
@@ -1100,7 +1120,8 @@ if (await Gate.allows(req.user, 'changeOwner', Teacher)) { /* ... */ }
 
 | File | Role |
 | --- | --- |
-| `routes/api.js` | The auth routes, their rate limits, and the Teacher routes with `EnsureEmailVerified` and `can()` |
+| `routes/auth.js` | The auth routes and their rate limits, mounted by `routes/api.js` |
+| `routes/api.js` | The Teacher example routes with `EnsureEmailVerified` and `can()` |
 | `app/Controllers/AuthController.js`, `PasswordResetController.js`, `EmailVerificationController.js` | HTTP layer of the flows |
 | `app/Services/AuthService.js` | The flows: tokens, rotation, logout, registration, verification, reset, emails |
 | `app/Repositories/RefreshTokenRepository.js`, `UserTokenRepository.js` | Hashed token storage |
@@ -1669,7 +1690,8 @@ The generated model has an `id` and a sample `email` column; edit it, then run `
 `npm run seed:run`.
 
 `--init` writes a new `routes/api.js` containing only the generated routes. The boilerplate already has a
-`routes/api.js`, so `--init` needs `--force`, which replaces the file, including the auth routes. Every target file is
+`routes/api.js`, so `--init` needs `--force`, which replaces the file: add `import auth from './auth.js';` and
+`auth(router);` back to it, or the auth routes are no longer mounted. Every target file is
 checked before anything is written: when `--init` is used without `--force` (or any target already exists), the
 command fails and nothing is created.
 
@@ -2051,12 +2073,13 @@ npm test
 
 | File | Covers |
 | --- | --- |
-| `tests/app.test.js` | Boots the real app with `testApp()` on in-memory SQLite (`better-sqlite3`), runs the migrations and seeders, and tests the sample routes, CSRF, the JWT flow and the Teacher CRUD over HTTP, including `401` for writes without a token |
-| `tests/openapi.test.js` | `/api/openapi.json` lists the Teacher CRUD (model schema, filters, bearer auth on writes) and the auth endpoints, hidden columns stay out of the schemas, and `validate()` rejects bad login bodies with `422` |
+| `tests/app.test.js` | Boots the real app with `testApp()` on in-memory SQLite (`better-sqlite3`), runs the migrations and seeders, and tests the welcome page, CSRF and the JWT flow over HTTP |
+| `tests/examples.test.js` | The examples: the sample routes, the Teacher CRUD (including `401` for writes without a token), `EnsureEmailVerified`, the `TeacherPolicy` authorization and the Teacher OpenAPI document. The `minimal` starter removes it with the examples |
+| `tests/openapi.test.js` | `/api/openapi.json` lists the auth endpoints, hidden columns stay out of the schemas, and `validate()` rejects bad login bodies with `422` |
 | `tests/rate-limit.test.js` | The login limiter (`429` after 5 failures per IP and email, separate counters per account and IP, case-insensitive emails, successes not counted, the per-IP limit) and the global `/api` limiter headers |
 | `tests/observability.test.js` | `/health` and `/ready` on the real app, the `X-Request-Id` header, `requestId` in error responses, and the `AppProvider.health()` hook |
 | `tests/jobs.test.js` | `SendWelcomeEmailJob` and `PruneSoftDeletedJob` with `dispatchSync()` on SQLite, job discovery and the `app/Console/Kernel.js` schedule. With `RABBITMQ_TEST_SERVER` set (for example `amqp://guest:guest@127.0.0.1:5672`), it also runs `workers/jobs.js`, `workers/scheduler.js` and `workers/retry-failed-jobs.js` against that RabbitMQ; otherwise that part is skipped |
-| `tests/auth.test.js` | Registration, login, refresh token rotation and reuse detection, logout, password reset, email verification, rate limits and the `TeacherPolicy` authorization over HTTP, with mail recorded by `fakeMail()` |
+| `tests/auth.test.js` | Registration, login, refresh token rotation and reuse detection, logout, password reset, email verification and rate limits over HTTP, with mail recorded by `fakeMail()` |
 | `tests/auth-unit.test.js` | `TokenHelper` and `EnsureEmailVerified` |
 | `tests/unit.test.js` | `PasswordHelper`, `UploadProvider` path sanitising (in a temporary app root), `UploadImageMiddleware` (`req.file`, `req.dataFiles` for `upload` columns, `422` / `400` errors) and the `TOKEN_SECRET` check |
 | `tests/upload-s3.test.js` | `UPLOAD_DRIVER` selection and the `s3` driver against a mocked SDK: keys, client settings, `Content-Type` / `Content-Disposition`, replacing and removing objects, `url()`, configuration errors and the missing-SDK error |

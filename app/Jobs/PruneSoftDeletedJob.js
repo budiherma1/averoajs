@@ -8,7 +8,7 @@ const models = { ...modelExports };
  * more than `days` days ago, in every model with timestamps (or the ones named in
  * `models`). Scheduled daily in app/Console/Kernel.js.
  *
- *   await PruneSoftDeletedJob.dispatch({ days: 30, models: ['Teacher'] });
+ *   await PruneSoftDeletedJob.dispatch({ days: 30, models: ['Users'] });
  */
 class PruneSoftDeletedJob extends Job {
   static tries = 3;

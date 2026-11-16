@@ -1,6 +1,6 @@
 // Integration tests of the authentication flows (registration, refresh tokens,
-// logout, password reset, email verification) and of the Gate/TeacherPolicy
-// authorization, on the real app with an in-memory better-sqlite3 database.
+// logout, password reset, email verification), on the real app with an in-memory
+// better-sqlite3 database.
 // Mail is recorded by fakeMail() from @averoa/core/testing: nothing is ever sent.
 import {
   describe, test, before, after, beforeEach,
@@ -20,9 +20,6 @@ let app;
 let DB;
 let http;
 let AuthService;
-let Gate;
-let Users;
-let Teacher;
 let AuthRateLimit;
 let mailer; // fakeMail(): mailer.sent holds every recorded message
 
@@ -66,9 +63,7 @@ async function register(prefix = 'user') {
 }
 
 before(async () => {
-  const utilities = await import('@averoa/utilities');
-  ({ DB, Gate } = utilities);
-  ({ Users, Teacher } = await import('#models'));
+  ({ DB } = await import('@averoa/utilities'));
   ({ default: AuthService } = await import('#app/Services/AuthService.js'));
   ({ default: AuthRateLimit } = await import('#app/Middleware/AuthRateLimitMiddleware.js'));
 
@@ -381,19 +376,6 @@ describe('email verification', () => {
     assert.equal((await http('GET', `/api/auth/verify-email?token=${tokenFromMail(changed.mail)}`)).status, 400);
   });
 
-  test('EnsureEmailVerified blocks unverified users until they verify', async () => {
-    const user = await register('teacherwriter');
-    const body = { teacher_name: 'Grace', type: 1 };
-
-    const blocked = await http('POST', '/api/teachers', { token: user.data.token, body });
-    assert.equal(blocked.status, 403, blocked.text);
-    assert.deepEqual(blocked.body, { status: false, message: 'Your email address is not verified.', code: 'EMAIL_NOT_VERIFIED' });
-
-    assert.equal((await http('GET', `/api/auth/verify-email?token=${tokenFromMail(user.mail)}`)).status, 200);
-    const allowed = await http('POST', '/api/teachers', { token: user.data.token, body });
-    assert.equal(allowed.status, 201, allowed.text);
-  });
-
   test('POST /api/auth/resend-verification is throttled and replaces the previous link', async () => {
     const user = await register('resend');
     const { token } = user.data;
@@ -530,81 +512,6 @@ describe('password reset', () => {
   test('a verification token cannot reset a password', async () => {
     const res = await http('POST', '/api/auth/reset-password', { body: { token: tokenFromMail(user.mail), password: 'long enough' } });
     assert.equal(res.status, 400);
-  });
-});
-
-describe('authorization: Gate and TeacherPolicy', () => {
-  let member;
-  let memberId;
-  let foreignTeacher;
-
-  before(async () => {
-    member = await login(MEMBER);
-    memberId = (await DB('users').where('email', MEMBER.email).first()).id;
-    foreignTeacher = await DB('teacher').whereNull('deleted_at').whereNot('user_id', memberId).first();
-  });
-
-  test('a member cannot update or delete a teacher owned by someone else (403)', async () => {
-    const update = await http('PUT', `/api/teachers/${foreignTeacher.id}`, { token: member.token, body: { teacher_name: 'Mallory' } });
-    assert.equal(update.status, 403, update.text);
-    assert.deepEqual(update.body, { status: false, message: 'This action is unauthorized.' });
-
-    const remove = await http('DELETE', `/api/teachers/${foreignTeacher.id}`, { token: member.token });
-    assert.equal(remove.status, 403, remove.text);
-
-    const row = await DB('teacher').where('id', foreignTeacher.id).first();
-    assert.equal(row.teacher_name, foreignTeacher.teacher_name);
-    assert.equal(row.deleted_at, null);
-  });
-
-  test('the authorization check runs before validation', async () => {
-    const res = await http('PUT', `/api/teachers/${foreignTeacher.id}`, { token: member.token, body: { type: 99 } });
-    assert.equal(res.status, 403, res.text);
-  });
-
-  test('unknown or malformed ids answer 404, missing tokens 401', async () => {
-    assert.equal((await http('PUT', '/api/teachers/987654', { token: member.token, body: { teacher_name: 'X' } })).status, 404);
-    assert.equal((await http('DELETE', '/api/teachers/abc', { token: member.token })).status, 404);
-    assert.equal((await http('DELETE', `/api/teachers/${foreignTeacher.id}`)).status, 401);
-  });
-
-  test('a member owns what they create and may change only that', async () => {
-    const created = await http('POST', '/api/teachers', { token: member.token, body: { teacher_name: 'Own', type: 1, user_id: 1 } });
-    assert.equal(created.status, 201, created.text);
-    const { id } = created.body.data;
-    assert.equal((await DB('teacher').where('id', id).first()).user_id, memberId, 'user_id is forced to the creator');
-
-    const update = await http('PUT', `/api/teachers/${id}`, { token: member.token, body: { teacher_name: 'Own 2', user_id: 1 } });
-    assert.equal(update.status, 200, update.text);
-    const row = await DB('teacher').where('id', id).first();
-    assert.equal(row.teacher_name, 'Own 2');
-    assert.equal(row.user_id, memberId, 'a member cannot give the teacher away');
-
-    const remove = await http('DELETE', `/api/teachers/${id}`, { token: member.token });
-    assert.equal(remove.status, 200, remove.text);
-  });
-
-  test('an admin may change any teacher and its owner', async () => {
-    const admin = await login(DEMO);
-    const res = await http('PUT', `/api/teachers/${foreignTeacher.id}`, { token: admin.token, body: { user_id: memberId } });
-    assert.equal(res.status, 200, res.text);
-    assert.equal((await DB('teacher').where('id', foreignTeacher.id).first()).user_id, memberId);
-  });
-
-  test('Gate checks with model instances', async () => {
-    const memberUser = await Users.query().findOne({ email: MEMBER.email });
-    const adminUser = await Users.query().findOne({ email: DEMO.email });
-    const own = await Teacher.query().findOne({ user_id: memberUser.id });
-    const other = await Teacher.query().whereNot('user_id', memberUser.id).first();
-
-    assert.equal(await Gate.allows(memberUser, 'update', own), true);
-    assert.equal(await Gate.allows(memberUser, 'update', other), false);
-    assert.equal(await Gate.allows(memberUser, 'changeOwner', Teacher), false);
-    assert.equal(await Gate.allows(adminUser, 'delete', other), true);
-    assert.equal(await Gate.allows(adminUser, 'admin'), true);
-    assert.equal(await Gate.allows(memberUser, 'admin'), false);
-    assert.equal(await Gate.allows(null, 'update', own), false);
-    await assert.rejects(Gate.authorize(memberUser, 'delete', other), (err) => err.statusCode === 403);
   });
 });
 

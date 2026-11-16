@@ -5,10 +5,7 @@ import { Users } from '#models';
 
 class SampleController {
   async sampleMethod(req, res) {
-    res.json({
-      name: 'Averoa',
-      version: '2.2.2',
-    });
+    res.json({ name: 'Averoa' });
   }
 
   async sampleMethodView(req, res) {

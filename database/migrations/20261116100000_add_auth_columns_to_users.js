@@ -2,7 +2,7 @@
 // - email_verified_at: set once the user opened the verification link (EnsureEmailVerified)
 // - token_version: part of every access token; incremented by logout-all and password
 //   resets, which invalidates every access token issued before (app/Strategies/JwtStrategy.js)
-// - is_admin: role flag used by the authorization examples (app/Policies/TeacherPolicy.js)
+// - is_admin: role flag for authorization (the 'admin' ability and policies' before())
 const COLUMNS = {
   email_verified_at: (table) => table.datetime('email_verified_at').nullable(),
   token_version: (table) => table.integer('token_version').notNullable().defaultTo(0),

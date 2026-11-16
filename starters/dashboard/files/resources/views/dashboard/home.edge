@@ -1,0 +1,40 @@
+@component('components/layout', { title, user, csrfToken, active: 'home' })
+  @if(stats)
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-lg-3"><div class="card stat"><div class="card-body">
+        <div class="stat-label">Users</div><div class="stat-value">{{ stats.total }}</div>
+      </div></div></div>
+      <div class="col-6 col-lg-3"><div class="card stat"><div class="card-body">
+        <div class="stat-label">Verified emails</div><div class="stat-value">{{ stats.verified }}</div>
+      </div></div></div>
+      <div class="col-6 col-lg-3"><div class="card stat"><div class="card-body">
+        <div class="stat-label">Admins</div><div class="stat-value">{{ stats.admins }}</div>
+      </div></div></div>
+      <div class="col-6 col-lg-3"><div class="card stat"><div class="card-body">
+        <div class="stat-label">New in 7 days</div><div class="stat-value">{{ stats.lastWeek }}</div>
+      </div></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Newest users</span>
+        <a href="/dashboard/users" class="small">All users</a>
+      </div>
+      <ul class="list-group list-group-flush">
+        @each(person in recent)
+          <li class="list-group-item d-flex justify-content-between">
+            <span>{{ person.first_name }} {{ person.last_name || '' }}</span>
+            <span class="text-muted">{{ person.email }}</span>
+          </li>
+        @else
+          <li class="list-group-item text-muted">No users yet.</li>
+        @end
+      </ul>
+    </div>
+  @else
+    <div class="card"><div class="card-body">
+      <h2 class="h5">Welcome, {{ user.first_name }}!</h2>
+      <p class="mb-0 text-muted">Keep your <a href="/dashboard/profile">profile</a> up to date.</p>
+    </div></div>
+  @end
+@end
