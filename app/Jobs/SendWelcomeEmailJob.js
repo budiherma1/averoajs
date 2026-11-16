@@ -2,6 +2,7 @@ import {
   Job, Mail, Log, exponentialBackoff,
 } from '@averoa/utilities';
 import { Users } from '#models';
+import authConfig from '../../config/auth.js';
 
 /**
  * Sends the welcome mail to a user. Dispatch it after a sign-up:
@@ -24,11 +25,11 @@ class SendWelcomeEmailJob extends Job {
     if (!user?.email) return { sent: false };
 
     await Mail.init()
-      .from(process.env.MAIL_FROM || 'no-reply@localhost')
+      .from(authConfig.mail.from) // MAIL_FROM_ADDRESS / MAIL_FROM_NAME, shared with the auth emails
       .to(user.email)
-      .subject('Welcome to Averoa')
-      .html('emails/welcome', { name: user.first_name, app: 'Averoa' })
-      .text(`Welcome, ${user.first_name}! Your Averoa account is ready.`)
+      .subject(`Welcome to ${authConfig.mail.appName}`)
+      .html('emails/welcome', { name: user.first_name, app: authConfig.mail.appName })
+      .text(`Welcome, ${user.first_name}! Your ${authConfig.mail.appName} account is ready.`)
       .send();
     return { sent: true };
   }

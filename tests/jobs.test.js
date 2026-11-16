@@ -53,7 +53,7 @@ describe('SendWelcomeEmailJob', () => {
     assert.deepEqual(await SendWelcomeEmailJob.dispatchSync({ userId: 1 }), { sent: true });
     assert.equal(sent.length, 1);
     assert.equal(sent[0].to, 'ada@example.com');
-    assert.equal(sent[0].subject, 'Welcome to Averoa');
+    assert.equal(sent[0].subject, 'Welcome to AveroaJS');
     assert.match(sent[0].html, /Welcome, &lt;b&gt;Ada&lt;\/b&gt;!/);
     assert.match(sent[0].text, /Welcome, <b>Ada<\/b>!/);
 

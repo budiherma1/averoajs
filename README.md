@@ -90,7 +90,8 @@ structure over assembling middleware by hand for every new service.
 | Models | Objection models whose `static column` map drives migrations, faker seeders and request validation; soft delete and audit columns; hidden columns |
 | REST resources | `node averoa make:crud <tables>` generates model, migration, seeder, controller and routes |
 | Query language | Thirteen filter operators, pagination, sorting, grouping, `$select`, `$relations`, all validated against the model's columns |
-| Authentication | JWT login (`POST /api/auth/login`) with brute-force protection, a passport-local session strategy, scrypt password hashing |
+| Authentication | JWT access tokens with rotating refresh tokens (reuse detection, logout, logout everywhere), registration, email verification, password reset, rate limits, a passport-local session strategy, scrypt password hashing |
+| Authorization | `Gate` abilities and model policies from `@averoa/utilities`, the `can()` route middleware and an `EnsureEmailVerified` middleware |
 | Rate limiting | A global per-IP limit on `/api`, a strict limiter on the login route, `rateLimit()` for your own routes; counters in memory or shared through Redis |
 | Sessions | MemoryStore for development, `SESSION_STORE=redis` for production and several instances |
 | Views | Edge 5 templates with dot-notation names, global variables and a CSRF token in every view |
@@ -156,7 +157,7 @@ curl http://localhost:8888/api
 curl -X POST http://localhost:8888/api/auth/login \
   -H 'content-type: application/json' \
   -d '{"email":"demo@averoa.test","password":"password"}'
-# {"status":true,"data":{"token":"eyJ...","type":"Bearer","expires_in":"1h"}}
+# {"status":true,"data":{"token":"eyJ...","type":"Bearer","expires_in":900,"refresh_token":"...","refresh_expires_in":2592000}}
 ```
 
 **Using Docker instead.** `compose.yaml` runs the app with MySQL, RabbitMQ, Redis, MinIO and Mailpit; see
@@ -175,9 +176,12 @@ Knex does not create the database itself.
 | `GET` | `/teacher` | `TeacherController@index` | renders `teacher.edge` |
 | `GET` | `/api` | `SampleController@sampleMethod` | `{ name, version }` |
 | `POST` | `/api/users` | `SampleController@sampleMethodModelPost` | behind `AuthMiddleware`; validates the body with `Users.validation()`; on success returns the user list (it does not insert) |
-| `POST` | `/api/auth/login` | `AuthController@login` | validates the body with `validate()` (`app/Validators/AuthValidator.js`), issues a JWT; behind `LoginRateLimitMiddleware` (`429` after 5 failed attempts per IP and email in 15 minutes) |
+| `POST` | `/api/auth/login` | `AuthController@login` | validates the body with `validate()` (`app/Validators/AuthValidator.js`), issues an access token and a refresh token; behind `LoginRateLimitMiddleware` (`429` after 5 failed attempts per IP and email in 15 minutes) |
 | `GET` | `/api/auth/me` | `AuthController@me` | behind `AuthMiddleware` |
-| `GET` `POST` `PUT` `DELETE` | `/api/teachers`, `/api/teachers/:id` | `TeacherController` | `router.crud('Teacher', 'teachers', ...)`; `GET` is public, `POST` / `PUT` / `DELETE` are behind `AuthMiddleware` |
+| `POST` | `/api/auth/register`, `/api/auth/refresh`, `/api/auth/logout`, `/api/auth/logout-all` | `AuthController` | see [Authentication](#authentication) |
+| `POST` | `/api/auth/forgot-password`, `/api/auth/reset-password` | `PasswordResetController` | see [Password reset](#password-reset) |
+| `GET` `POST` | `/api/auth/verify-email`; `POST /api/auth/resend-verification` | `EmailVerificationController` | see [Email verification](#email-verification) |
+| `GET` `POST` `PUT` `DELETE` | `/api/teachers`, `/api/teachers/:id` | `TeacherController` | `router.crud('Teacher', 'teachers', ...)`; `GET` is public; `POST` needs a JWT and a verified email; `PUT` / `DELETE` need a JWT and `TeacherPolicy` (owner or admin) |
 | `GET` | `/api/v2/teachers` | `TeacherController@findAll` | nested `prefix()` example |
 | `GET` | `/api/v2/test`, `/api/v2/test/otherprefix` | `SampleController@sampleMethodView` | nested `prefix()` example |
 | `GET` | `/api/openapi.json`, `/api/docs` | `@averoa/core` | OpenAPI document and Swagger UI; only when `OPENAPI_ENABLED` (default: development/test). See [API documentation](#api-documentation) |
@@ -352,7 +356,18 @@ All settings come from environment variables, loaded from `.env` in the applicat
 | `APP_PORT` | `3000` | Port to listen on. `.env.example` sets `8888`. |
 | `APP_HOST` | `http://localhost` | Only used in the startup message. The server listens on all interfaces. |
 | `TOKEN_SECRET` | none, **required** | HS256 secret for JWTs. Startup fails without it. |
-| `TOKEN_EXPIRES_IN` | `1h` | JWT lifetime in jsonwebtoken format (`60`, `2h`, `7d`). |
+| `JWT_ACCESS_TTL` | `TOKEN_EXPIRES_IN`, else `15m` | Access token lifetime: seconds (`900`) or a number with a unit `s`, `m`, `h`, `d`, `w`. Anything else stops the app at startup. |
+| `TOKEN_EXPIRES_IN` | unset | Older name of `JWT_ACCESS_TTL`, read when that one is unset. Same format (jsonwebtoken strings such as `2 days` are no longer accepted). |
+| `JWT_REFRESH_TTL` | `30d` | Refresh token lifetime; each refresh rotates the token and restarts it. |
+| `PASSWORD_RESET_TTL` | `60m` | Lifetime of a password reset link. |
+| `PASSWORD_RESET_THROTTLE` | `60s` | Minimum time between two reset links for one account (requests in between are answered the same and send nothing). |
+| `EMAIL_VERIFICATION_TTL` | `24h` | Lifetime of an email verification link. |
+| `EMAIL_VERIFICATION_THROTTLE` | `60s` | Minimum time between two verification emails (`resend-verification` answers `429` before). |
+| `APP_URL` | `APP_HOST:APP_PORT` | Public URL of the application. |
+| `FRONTEND_URL` | `APP_URL` | Base of the links in the emails: `<FRONTEND_URL>/verify-email?token=...` and `<FRONTEND_URL>/reset-password?token=...`. |
+| `AUTH_RATE_LIMIT_WINDOW_MS` | `900000` | Window of the auth rate limits (15 minutes). |
+| `AUTH_RATE_LIMIT_MAX` | `10` | Requests per window, client IP and endpoint, to `register` and `forgot-password`. |
+| `AUTH_RATE_LIMIT_FAILED_MAX` | `20` | Failed requests per window, client IP and endpoint, to `refresh`, `reset-password` and `verify-email`. |
 | `SESSION_SECRET` | random per boot | Session cookie secret. **Required unless `NODE_ENV` is `development` or `test`.** A comma-separated list rotates secrets: the first signs, all verify. |
 | `CSRF_ENABLED` | `true` | `false`, `0`, `no` or `off` disables CSRF protection. |
 | `CORS_WHITELIST` | empty | Comma-separated allowed origins. See [CORS](#cors). Empty in `.env.example`. |
@@ -449,7 +464,6 @@ SMTP is the only mail transport.
 | `JOBS_WORKER_QUEUES` | unset | `npm run worker:jobs`: comma-separated queues to consume. Unset: the queues of the jobs in `app/Jobs`. |
 | `JOBS_CONCURRENCY` | `1` | `npm run worker:jobs`: jobs run at the same time per queue. |
 | `SCHEDULE_TIMEZONE` | unset | Default IANA time zone of the schedule. Unset: the process time zone. |
-| `MAIL_FROM` | `no-reply@localhost` | Sender of `SendWelcomeEmailJob`. |
 
 ### Fetch
 
@@ -962,29 +976,138 @@ Content-Security-Policy; the rest of the app keeps the default CSP.
 curl -X POST http://localhost:8888/api/auth/login \
   -H 'content-type: application/json' \
   -d '{"email":"demo@averoa.test","password":"password"}'
-# {"status":true,"data":{"token":"eyJ...","type":"Bearer","expires_in":"1h"}}
+# {"status":true,"data":{"token":"eyJ...","type":"Bearer","expires_in":900,
+#                        "refresh_token":"Qk3...","refresh_expires_in":2592000}}
 
 curl http://localhost:8888/api/auth/me -H 'authorization: Bearer eyJ...'
 # {"status":true,"data":{"id":11,"first_name":"Demo","last_name":"User","email":"demo@averoa.test",...}}
+
+# when the access token expires, trade the refresh token for a new pair
+curl -X POST http://localhost:8888/api/auth/refresh \
+  -H 'content-type: application/json' -d '{"refresh_token":"Qk3..."}'
 ```
+
+`expires_in` and `refresh_expires_in` are seconds (in 2.1.0 `expires_in` was the `TOKEN_EXPIRES_IN` string).
+Upgrading an existing application: run `npm run migrate:up`; access tokens issued before (without the `tv` and `sid`
+claims) are rejected, so clients log in again once.
+
+| Endpoint | Body | Answer |
+| --- | --- | --- |
+| `POST /api/auth/login` | `{ email, password }` | `200` token pair; `401` invalid email or password; `422` missing field |
+| `POST /api/auth/register` | `{ first_name, last_name?, email, password, address? }` | `201 { user, ...token pair }` and a verification email; `422` invalid field or email already registered |
+| `POST /api/auth/refresh` | `{ refresh_token }` | `200` a new token pair, the presented refresh token is revoked; `401` unknown, expired, revoked or reused token |
+| `POST /api/auth/logout` | none, JWT | `200`; ends this session (its refresh tokens and access tokens) |
+| `POST /api/auth/logout-all` | none, JWT | `200`; ends every session of the user |
+| `GET /api/auth/me` | none, JWT | `200` the user |
+
+**How sessions work.** A login or a registration starts a session: a refresh token *family*. Its id is the `sid`
+claim of the access tokens, which also carry `tv` (the user's `token_version`) and a unique `jti`. `JwtStrategy`
+accepts an access token only while the user is active, `tv` equals `users.token_version` and the family still has a
+live refresh token, so logging out takes effect at once rather than when the access token expires.
+
+- **Rotation.** Every refresh revokes the presented token and issues the next one of the same family.
+- **Reuse detection.** Presenting a token that was already rotated means two parties hold it (the client and an
+  attacker), so the whole family is revoked: both must log in again. Two concurrent refreshes with the same token are
+  handled the same way: at most one succeeds.
+- **Logout everywhere.** `logout-all` and a password reset increment `token_version` and revoke every refresh token.
+  Call `AuthService.invalidateSessions(userId)` after changing a password or an email address in your own code.
+- **Storage.** Refresh tokens and the reset / verification tokens are 256-bit random values; only their SHA-256 hash
+  is stored (`refresh_tokens`, `user_tokens`), so a database leak does not reveal usable tokens. Lookups go through the
+  hash, so no token is ever compared in application code. Expired rows can be removed with
+  `RefreshTokenRepository.deleteExpired()` and `UserTokenRepository.deleteExpired()` from a scheduled job.
 
 | Response | When |
 | --- | --- |
-| `422 { status: false, data: { column, message: 'required' } }` | `email` or `password` missing or not a string |
+| `422 { status: false, data: { column, message } }` | A required field is missing, not a string, or invalid |
 | `401 { status: false, message: 'Invalid email or password' }` | Unknown email, wrong password, or soft-deleted user |
 | `429 { status: false, message: 'Too many login attempts, please try again later.', code: 'ERATELIMIT' }` | Too many failed logins (see [Rate limiting](#rate-limiting)); `Retry-After` says how many seconds to wait |
-| `401 { status: false, message: 'Unauthorized' }` | Missing, expired or invalid token on a route behind `AuthMiddleware` |
+| `401 { status: false, message: 'Unauthorized' }` | Missing, expired, invalid or revoked token on a route behind `AuthMiddleware` |
+| `403 { status: false, message, code: 'EMAIL_NOT_VERIFIED' }` | `EnsureEmailVerified` on a user without a verified address |
+| `429 { status: false, message }` + `Retry-After` | Rate limit or resend throttle |
+
+### Email verification
+
+Registration sends a link to `<FRONTEND_URL>/verify-email?token=...` (template
+`resources/views/emails/verify-email.edge`, with a plain-text part). The front end posts the token to the API;
+without a front end, `GET /api/auth/verify-email?token=...` works too.
+
+| Endpoint | Answer |
+| --- | --- |
+| `GET /api/auth/verify-email?token=` / `POST /api/auth/verify-email { token }` | `200`; `400` invalid, expired or used link, or the address changed since it was sent |
+| `POST /api/auth/resend-verification` (JWT) | `200` a new link (the previous one stops working); `429` + `Retry-After` within `EMAIL_VERIFICATION_THROTTLE` |
+
+Links are single use and expire after `EMAIL_VERIFICATION_TTL`. Protect routes with `EnsureEmailVerified` after
+`AuthMiddleware`:
+
+```js
+router.post('/', 'TeacherController@create', ['AuthMiddleware', 'EnsureEmailVerified']);
+```
+
+### Password reset
+
+| Endpoint | Answer |
+| --- | --- |
+| `POST /api/auth/forgot-password { email }` | Always `200` with the same message; `422` only for a malformed address |
+| `POST /api/auth/reset-password { token, password }` | `200`; `400` invalid, expired or used link; `422` missing token or invalid password |
+
+`forgot-password` never reveals whether an account exists: the lookup, the token and the email happen after the
+response is sent, so neither the body nor the response time depends on the address. At most one link per account is
+sent per `PASSWORD_RESET_THROTTLE`, and a new link replaces the previous one. The link
+(`<FRONTEND_URL>/reset-password?token=...`, template `resources/views/emails/reset-password.edge`) is single use and
+expires after `PASSWORD_RESET_TTL`. A successful reset signs the user out of every session.
+
+Registration does tell whether an address is taken (`422`, `email is already registered`); it is rate limited like
+`forgot-password`.
+
+### Rate limits
+
+`AuthRateLimitMiddleware` limits the public authentication endpoints per client IP (`req.ip`, which follows
+`TRUST_PROXY`) and endpoint. `register` and `forgot-password` count every request (`AUTH_RATE_LIMIT_MAX`), because
+they create rows or send email; `refresh`, `reset-password` and `verify-email` count only failed requests
+(`AUTH_RATE_LIMIT_FAILED_MAX`), so normal refreshes are never blocked. Over the limit they answer `429` with
+`Retry-After`. The limiter runs before `validate()`, so malformed requests count too. The counters live in the
+`RATE_LIMIT_STORE` store like the login limiter's: in memory per process, or shared by every instance with Redis
+(see [Rate limiting](#rate-limiting)).
+
+### Email
+
+The emails are sent with `Mail` from `@averoa/utilities` (SMTP settings in `config/mail.js`) from
+`MAIL_FROM_ADDRESS` / `MAIL_FROM_NAME`, after the response, so a slow or failing SMTP server neither delays nor
+fails the request; failures are logged. Settings live in `config/auth.js`.
+
+### Authorization
+
+`app/Providers/AuthProvider.js` registers the model policies and abilities of the `Gate` from `@averoa/utilities` at
+startup. `app/Policies/TeacherPolicy.js` is the example: admins (`users.is_admin`) may do everything, owners
+(`teacher.user_id`) may update and delete their teachers, and only admins may change the owner.
+
+```js
+import { can } from '@averoa/utilities';
+
+// 401 without a user, 404 when the loader finds nothing, 403 when the policy denies
+router.put('/:id', 'TeacherController@update', ['AuthMiddleware', can('update', findTeacher)]);
+
+// in code
+if (await Gate.allows(req.user, 'changeOwner', Teacher)) { /* ... */ }
+```
+
+### Files
 
 | File | Role |
 | --- | --- |
-| `routes/api.js` | `POST /auth/login`; `GET /auth/me` and `POST /users` inside `router.middleware(['AuthMiddleware'], ...)`; the Teacher `post` / `put` / `delete` routes with `['AuthMiddleware']` as route middleware |
-| `app/Controllers/AuthController.js` | Checks the credentials and signs `{ id }` with `TOKEN_SECRET` (HS256, `TOKEN_EXPIRES_IN`) |
-| `app/Middleware/AuthMiddleware.js` | Calls `JwtStrategy.authenticate()` |
-| `app/Middleware/LoginRateLimitMiddleware.js` | Brute-force protection on the login route (route middleware) |
-| `app/Strategies/JwtStrategy.js` | Verifies the bearer token, loads the active user into `req.user` |
+| `routes/api.js` | The auth routes, their rate limits, and the Teacher routes with `EnsureEmailVerified` and `can()` |
+| `app/Controllers/AuthController.js`, `PasswordResetController.js`, `EmailVerificationController.js` | HTTP layer of the flows |
+| `app/Services/AuthService.js` | The flows: tokens, rotation, logout, registration, verification, reset, emails |
+| `app/Repositories/RefreshTokenRepository.js`, `UserTokenRepository.js` | Hashed token storage |
+| `app/Strategies/JwtStrategy.js` | Verifies the bearer token, its token version and session; sets `req.user` and `req.auth` (the claims) |
+| `app/Middleware/AuthMiddleware.js`, `EnsureEmailVerified.js` | Authentication, verified email |
+| `app/Middleware/LoginRateLimitMiddleware.js`, `AuthRateLimitMiddleware.js` | Brute-force protection on login; rate limits on the other public auth endpoints |
+| `app/Validators/AuthValidator.js` | `validate()` rules of the auth request bodies (also used for the OpenAPI document) |
+| `app/Helpers/TokenHelper.js`, `PasswordHelper.js` | Random tokens, SHA-256, durations; scrypt hashing |
 | `app/Repositories/UserRepository.js` | User lookup and password check; unknown emails are checked against a dummy hash so that response time does not reveal which accounts exist |
-| `app/Helpers/PasswordHelper.js` | scrypt hashing with `node:crypto` (format `scrypt$N$r$p$salt$key`) |
-| `app/Models/Users.js` | Lower-cases `email` and hashes `password` in `$beforeInsert` / `$beforeUpdate`; hides `password` and `otp` |
+| `app/Models/Users.js` | Lower-cases `email` and hashes `password` in `$beforeInsert` / `$beforeUpdate`; hides `password`, `otp` and `token_version`; `is_admin`, `email_verified_at` and `token_version` are not client-writable |
+| `app/Providers/AuthProvider.js`, `app/Policies/TeacherPolicy.js` | Authorization |
+| `config/auth.js` | Lifetimes, throttles, sender and email links |
 
 To protect any route, declare it inside `router.middleware(['AuthMiddleware'], () => { ... })` or pass
 `['AuthMiddleware']` as its middleware argument.
@@ -1182,7 +1305,7 @@ The boilerplate ships two jobs:
 
 | Job | What it does |
 | --- | --- |
-| `SendWelcomeEmailJob` | `dispatch({ userId })`: mails `resources/views/emails/welcome.edge` to the user (from `MAIL_FROM`). Users that no longer exist or are soft-deleted get nothing. 5 tries with exponential backoff from 10 s. |
+| `SendWelcomeEmailJob` | `dispatch({ userId })`: mails `resources/views/emails/welcome.edge` to the user (from `MAIL_FROM_ADDRESS` / `MAIL_FROM_NAME`, like the auth emails). Users that no longer exist or are soft-deleted get nothing. 5 tries with exponential backoff from 10 s. |
 | `PruneSoftDeletedJob` | `dispatch({ days = 30, models? })`: hard-deletes rows whose `deleted_at` is older than `days` days, in every model with timestamps or in the named `#models` only. Scheduled daily at 03:00. |
 
 `EmailSubscriberJob` (the mail worker) and `GenerateAppTokenJob` (`npm run generate:token`) are plain functions, not
@@ -1469,10 +1592,13 @@ Model-based migrations created by `make:crud` are already ES modules and call `M
 
 **Seeds replace data.** `Model.seeder()` and `Model.seederCustom()` delete every row of their table before inserting,
 so `npm run seed:run` resets the seeded tables. The shipped seeds create 10 users, the demo user
-`demo@averoa.test` (password `password`), 10 teachers and 10 rooms. Every seeded user has the password `password`.
+`demo@averoa.test` (an admin), the member `member@averoa.test` (not an admin), 10 teachers and 10 rooms. Both known
+accounts have a verified email address. Every seeded user has the password `password`.
 
 Do not edit a migration that has already run in a shared environment. Add a new one, as
-`database/migrations/20261116000000_add_password_to_users.js` does.
+`database/migrations/20261116000000_add_password_to_users.js` does, or the authentication migrations:
+`20261116100000_add_auth_columns_to_users.js` (`email_verified_at`, `token_version`, `is_admin`),
+`20261116100100_create_refresh_tokens_table.js` and `20261116100200_create_user_tokens_table.js`.
 
 ## CLI generators
 
@@ -1648,6 +1774,8 @@ default with `SESSION_STORE=redis`), otherwise each instance counts on its own a
       `npm run migrate:up` run as part of the deployment.
 - [ ] `npm run seed:run` **not** run against production data: it deletes seeded tables and creates the demo user with a
       known password.
+- [ ] `FRONTEND_URL`, `MAIL_FROM_ADDRESS` and the SMTP settings set, so verification and reset emails are delivered
+      with working links. Behind a proxy, `TRUST_PROXY` set so the auth rate limits see client IPs, not the proxy's.
 - [ ] Sample routes (`/users`, `POST /api/users`, `/teacher`, `/api/teachers`, `/api/v2/*`) removed or protected. Only
       `POST /api/users` and the Teacher writes require a JWT; `/users` and the Teacher reads are public.
 - [ ] `OPENAPI_ENABLED` unset or `false`, unless the API description should be public (it is off by default outside
@@ -1905,6 +2033,8 @@ npm test
 | `tests/rate-limit.test.js` | The login limiter (`429` after 5 failures per IP and email, separate counters per account and IP, case-insensitive emails, successes not counted, the per-IP limit) and the global `/api` limiter headers |
 | `tests/observability.test.js` | `/health` and `/ready` on the real app, the `X-Request-Id` header, `requestId` in error responses, and the `AppProvider.health()` hook |
 | `tests/jobs.test.js` | `SendWelcomeEmailJob` and `PruneSoftDeletedJob` with `dispatchSync()` on SQLite, job discovery and the `app/Console/Kernel.js` schedule. With `RABBITMQ_TEST_SERVER` set (for example `amqp://guest:guest@127.0.0.1:5672`), it also runs `workers/jobs.js`, `workers/scheduler.js` and `workers/retry-failed-jobs.js` against that RabbitMQ; otherwise that part is skipped |
+| `tests/auth.test.js` | Registration, login, refresh token rotation and reuse detection, logout, password reset, email verification, rate limits and the `TeacherPolicy` authorization over HTTP, with mail captured by a nodemailer JSON transport |
+| `tests/auth-unit.test.js` | `TokenHelper` and `EnsureEmailVerified` |
 | `tests/unit.test.js` | `PasswordHelper`, `UploadProvider` path sanitising (in a temporary app root), `UploadImageMiddleware` (`req.file`, `req.dataFiles` for `upload` columns, `422` / `400` errors) and the `TOKEN_SECRET` check |
 | `tests/upload-s3.test.js` | `UPLOAD_DRIVER` selection and the `s3` driver against a mocked SDK: keys, client settings, `Content-Type` / `Content-Disposition`, replacing and removing objects, `url()`, configuration errors and the missing-SDK error |
 | `tests/upload-s3-minio.test.js` | The `s3` driver against a real MinIO server. Skipped unless `S3_TEST_ENDPOINT` is set (see below) |
@@ -1988,7 +2118,7 @@ and of `@averoa/core` (`make:job` generates a `Job` subclass). Changes that affe
 - **`app/Jobs/ExampleJob.js` is gone.** Remove its import if your code used it.
 - **`make:job`** generates a class extending `Job` (exported as the class) instead of an instance with `sample()`.
 - **New dependency** `croner` and new env vars `JOBS_QUEUE`, `JOBS_WORKER_QUEUES`, `JOBS_CONCURRENCY`,
-  `SCHEDULE_TIMEZONE` and `MAIL_FROM` (see `.env.example`).
+  `SCHEDULE_TIMEZONE` and `MAIL_FROM_ADDRESS` / `MAIL_FROM_NAME` (see `.env.example`).
 
 ### What's new in 2.1.0
 
