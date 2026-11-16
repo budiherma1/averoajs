@@ -1,6 +1,8 @@
+import { Log } from '@averoa/utilities';
+
 class ExampleRepository {
   sample() {
-    console.log('ExampleRepository');
+    Log.info('ExampleRepository');
   }
 }
 
