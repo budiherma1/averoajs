@@ -1,4 +1,4 @@
-import { LocalStrategy } from '../Strategies/index.js';
+import { LocalStrategy } from '#strategies';
 
 class LoginMiddleware {
   handle(req, res, next) {
@@ -6,4 +6,4 @@ class LoginMiddleware {
   }
 }
 
-export default new LoginMiddleware;
+export default new LoginMiddleware();

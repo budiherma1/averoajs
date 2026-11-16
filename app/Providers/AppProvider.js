@@ -8,8 +8,32 @@ class AppProvider {
    */
   beginning(app) {
     // sample
-    // app.use(bodyParser.json())
-    // app.use(bodyParser.urlencoded({ extended: true }))
+    // app.use(express.json())
+    // app.use(express.urlencoded({ extended: true }))
+  }
+
+  /**
+   * [helmet options. Receives the defaults of @averoa/core (CSP: local assets + Google Fonts).
+   * Return them (changed or not), or `false` to disable helmet]
+   *
+   * @param   {[object]}  defaults  [default helmet options]
+   *
+   * @return  {[object|false]}
+   */
+  helmet(defaults) {
+    // sample: allow scripts from a CDN
+    // defaults.contentSecurityPolicy.directives['script-src'].push('https://cdn.jsdelivr.net');
+    return defaults;
+  }
+
+  /**
+   * [extra express-session options, merged into the defaults of @averoa/core (e.g. a store)]
+   *
+   * @return  {[object|undefined]}
+   */
+  session() {
+    // sample
+    // return { store: new RedisStore({ client: redisClient }) };
   }
 
   /**
@@ -21,8 +45,7 @@ class AppProvider {
    */
   end(app) {
     // sample
-    // app.use(bodyParser.json())
-    // app.use(bodyParser.urlencoded({ extended: true }))
+    // app.use((req, res) => res.status(404).render('404'))
   }
 
   /**
@@ -36,6 +59,17 @@ class AppProvider {
     // sample
     // const io = new Server(server);
   }
+
+  /**
+   * [Called on SIGTERM/SIGINT after the http server stopped accepting connections,
+   * before the DB and queue connections are closed (bounded by SHUTDOWN_TIMEOUT)]
+   *
+   * @return  {[Promise<void>]}
+   */
+  async shutdown() {
+    // sample
+    // await io.close();
+  }
 }
 
-export default new AppProvider;
+export default new AppProvider();

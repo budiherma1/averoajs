@@ -1,9 +1,12 @@
+// nodemailer transport options
+// (used by Mail in @averoa/utilities and app/Jobs/EmailSubscriberJob.js)
 export default {
   host: process.env.MAIL_HOST,
-  port: process.env.MAIL_PORT,
-  secure: process.env.NODE_ENV === 'production', // true for 465, false for other ports
-  auth: {
-    user: process.env.MAIL_USERNAME, // generated ethereal user
-    pass: process.env.MAIL_PASSWORD, // generated ethereal password
-  },
+  port: process.env.MAIL_PORT ? Number(process.env.MAIL_PORT) : undefined,
+  // implicit TLS (port 465); MAIL_ENCRYPTION=tls means STARTTLS,
+  // which nodemailer negotiates by itself
+  secure: process.env.MAIL_ENCRYPTION === 'ssl' || Number(process.env.MAIL_PORT) === 465,
+  auth: process.env.MAIL_USERNAME
+    ? { user: process.env.MAIL_USERNAME, pass: process.env.MAIL_PASSWORD }
+    : undefined,
 };

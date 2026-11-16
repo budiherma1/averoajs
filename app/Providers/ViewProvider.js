@@ -25,4 +25,4 @@ class ViewProvider {
   }
 }
 
-export default new ViewProvider;
+export default new ViewProvider();

@@ -4,4 +4,4 @@ class ExampleJob {
   }
 }
 
-export default new ExampleJob;
+export default new ExampleJob();

@@ -1,3 +1,3 @@
 export default function teachers(router) {
-    router.get('/', 'TeacherController@findAll');
+  router.get('/', 'TeacherController@findAll');
 }

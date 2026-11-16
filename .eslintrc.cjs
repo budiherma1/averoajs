@@ -11,6 +11,10 @@ module.exports = {
     sourceType: 'module',
   },
   rules: {
+    // `#models`, `#helpers`, ... are package.json subpath imports
+    'import/no-unresolved': ['error', { ignore: ['^#'] }],
+    // provider/strategy stubs document their parameters
+    'no-unused-vars': ['error', { args: 'none' }],
     'import/no-extraneous-dependencies': ['error', { devDependencies: true, optionalDependencies: false, peerDependencies: false }],
     'no-restricted-syntax': [0, 'FunctionExpression', 'WithStatement', "BinaryExpression[operator='in']"],
     'guard-for-in': 0,

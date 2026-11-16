@@ -4,4 +4,4 @@ class ExampleHelper {
   }
 }
 
-export default new ExampleHelper;
+export default new ExampleHelper();

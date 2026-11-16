@@ -25,4 +25,4 @@ class MiddlewareProvider {
   }
 }
 
-export default new MiddlewareProvider;
+export default new MiddlewareProvider();

@@ -9,20 +9,17 @@ class Rooms extends Model {
     id: {
       migration: (m) => m.table.increments(m.column).primary(),
       flag: { required: false },
-      validation: [{ run: (v) => v.validator.isEmail(v.value), msg: 'email format required' }],
     },
     room_name: {
       migration: (m) => m.table.string(m.column, 50).nullable(),
-      seed: (f) => f.name.firstName(),
+      seed: (f) => `Room ${f.person.firstName()}`,
       flag: { required: true },
-      validation: [{ run: (v) => v.validator.isEmail(v.value), msg: 'email format required' }],
+      validation: [{ run: (v) => v.validator.isLength(String(v.value).trim(), { min: 1, max: 50 }), msg: 'must be 1-50 characters' }],
     },
     teacher_id: {
       migration: (m) => m.table.integer(m.column, 50).nullable(),
       flag: { required: true },
-      //   seed: (f) => f.name.firstName(),
-      //   method: { get: true, post: true },
-      //   validation: [{ run: (v) => v.validator.isEmail(v.value), msg: 'email format required' }],
+      validation: [{ run: (v) => v.validator.isInt(String(v.value), { min: 1 }), msg: 'must be a positive integer' }],
     },
   };
 }

@@ -6,4 +6,4 @@ class ErrorMiddleware {
   }
 }
 
-export default new ErrorMiddleware;
+export default new ErrorMiddleware();

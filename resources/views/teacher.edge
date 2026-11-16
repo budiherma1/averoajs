@@ -489,6 +489,9 @@ https://templatemo.com/tm-578-first-portfolio
 
                             <div class="col-lg-6 col-12 mt-5 mt-lg-0">
                                 <form action="#" method="get" class="custom-form contact-form" role="form">
+                                    {{-- GET forms are not CSRF checked (and must not carry the token in the URL).
+                                         A POST/PUT/PATCH/DELETE form needs the token:
+                                         <input type="hidden" name="_csrf" value="{{ csrfToken }}"> --}}
                                     <div class="row">
                                         <div class="col-lg-6 col-md-6 col-12">
                                             <div class="form-floating">

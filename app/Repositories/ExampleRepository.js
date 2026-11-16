@@ -4,4 +4,4 @@ class ExampleRepository {
   }
 }
 
-export default new ExampleRepository;
+export default new ExampleRepository();

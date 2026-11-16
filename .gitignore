@@ -101,5 +101,13 @@ dist
 
 # TernJS port file
 .tern-port
+# runtime storage (folders kept with .gitkeep; core writes logs and uploads here)
 storages/tmp/*
 storages/upload/*
+!storages/upload/.gitkeep
+storages/logs/*
+!storages/logs/.gitkeep
+
+# local sqlite databases
+*.sqlite
+*.sqlite3

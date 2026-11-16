@@ -1,4 +1,4 @@
-import { JwtStrategy } from '../Strategies/index.js';
+import { JwtStrategy } from '#strategies';
 
 class AuthMiddleware {
   handle(req, res, next) {
@@ -6,4 +6,4 @@ class AuthMiddleware {
   }
 }
 
-export default new AuthMiddleware;
+export default new AuthMiddleware();
