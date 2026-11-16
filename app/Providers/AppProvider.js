@@ -69,6 +69,23 @@ class AppProvider {
   }
 
   /**
+   * [Readiness checks for GET /ready. Receives the built-in checks of @averoa/core
+   * ({ database }). Return them (changed or not), or `false` to disable /health and /ready.
+   * A check is `async ({ signal, timeout }) => any`: throwing, rejecting, timing out
+   * (READY_TIMEOUT) or returning `false` marks it down. `{ check, timeout, critical: false }`
+   * reports a check without failing readiness]
+   *
+   * @param   {[object]}  checks  [built-in checks]
+   *
+   * @return  {[object|false]}
+   */
+  health(checks) {
+    // sample
+    // return { ...checks, redis: () => redisClient.ping() };
+    return checks;
+  }
+
+  /**
    * [Configuration for expressjs(app) placed in the end after another instance]
    *
    * @param   {[object]}  app  [app description]
@@ -93,8 +110,9 @@ class AppProvider {
   }
 
   /**
-   * [Called on SIGTERM/SIGINT after the http server stopped accepting connections,
-   * before the DB and queue connections are closed (bounded by SHUTDOWN_TIMEOUT)]
+   * [Called on SIGTERM/SIGINT after /ready answered 503 (for SHUTDOWN_DELAY ms) and the
+   * http server stopped accepting connections, before the DB and queue connections are
+   * closed (bounded by SHUTDOWN_TIMEOUT)]
    *
    * @return  {[Promise<void>]}
    */

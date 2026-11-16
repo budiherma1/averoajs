@@ -50,6 +50,7 @@ in three npm packages ([`@averoa/core`](#ecosystem), [`@averoa/routes`](#ecosyst
 - [CLI generators](#cli-generators)
 - [Utilities](#utilities)
 - [Security](#security)
+- [Observability](#observability)
 - [Testing and linting](#testing-and-linting)
 - [Upgrading from 1.x](#upgrading-from-1x)
 - [Ecosystem](#ecosystem)
@@ -93,7 +94,7 @@ structure over assembling middleware by hand for every new service.
 | Views | Edge 5 templates with dot-notation names, global variables and a CSRF token in every view |
 | Mail and queues | Nodemailer with Edge templates, RabbitMQ publishing, and a mail worker with retries and reconnects |
 | Database | MySQL (`mysql2`, default), PostgreSQL (`pg`) and SQLite (`better-sqlite3`, `sqlite3`) through Knex |
-| Operations | Access and error logs, winston logging, graceful shutdown on `SIGTERM` / `SIGINT` |
+| Operations | Request IDs, structured (JSON) logs with redaction, stdout or file logging, `/health` and `/ready` probes, graceful shutdown on `SIGTERM` / `SIGINT` |
 | Testing | `node --test` integration tests that boot the real app on in-memory SQLite |
 
 ## Requirements
@@ -234,10 +235,11 @@ averoajs/
 2. Import `@averoa/utilities`, which creates the shared Knex instance (`config/database.js`), the logger and the
    Edge instance.
 3. Import `app/Providers/index.js` (optional).
-4. Create the Express app, disable `x-powered-by`, and apply `TRUST_PROXY`.
+4. Create the Express app, disable `x-powered-by`, apply `TRUST_PROXY`, assign the [request id](#request-ids) and
+   answer the [health probes](#health-checks) (`/health`, `/ready`).
 5. `AppProvider.beginning(app)`.
 6. Request logging (morgan) to `storages/logs/access.log` and `storages/logs/error.log`, plus the console outside
-   `production` and `test`.
+   `production` and `test` (see [Logging](#logging) for `LOG_CHANNEL` and JSON lines).
 7. Helmet, using the options returned by `AppProvider.helmet(defaults)`.
 8. CORS.
 9. The global rate limiter on `/api` (`RATE_LIMIT_*`, `AppProvider.rateLimit(defaults)`). When a Redis store is
@@ -260,14 +262,16 @@ and installs the graceful-shutdown handlers. `createApp()` runs steps 1 to 20 wi
 
 | Function | Returns | Options |
 | --- | --- | --- |
-| `start(options?)` | `Promise<{ app, server }>` | `port`, `host` (listen hostname), `handleSignals` (default `true`) |
-| `createApp(options?)` | `Promise<{ app }>` | none needed by applications |
+| `start(options?)` | `Promise<{ app, server, health, close }>` | `port`, `host` (listen hostname), `handleSignals` (default `true`) |
+| `createApp(options?)` | `Promise<{ app, health }>` | none needed by applications |
 
 ### Request lifecycle
 
 ```mermaid
 flowchart TD
-  req(["HTTP request"]) --> early["AppProvider.beginning() middleware"]
+  req(["HTTP request"]) --> rid["request id"]
+  rid -->|"GET /health, /ready"| probe["health probes"]
+  rid --> early["AppProvider.beginning() middleware"]
   early --> base["morgan → helmet → CORS → rate limit (/api) → body parsers → cookies → session → passport"]
   base --> csrf{"CSRF check"}
   csrf -->|"path under /api"| api["API router"]
@@ -283,12 +287,12 @@ flowchart TD
   stat -.-> err
 ```
 
-A client over the `/api` rate limit is answered with `429` before the body is parsed. The error handler answers with
-JSON (`{ status: false, message }`) when the path is under `/api`, the request is an XHR, or the client prefers JSON,
-and with a small HTML page otherwise. Error `status` / `statusCode` values between 400 and 599 are kept; anything else
-becomes 500. 5xx errors are logged. When `NODE_ENV` is `development` or `test` the response also contains the stack
-trace; with any other `NODE_ENV`, including unset, there is no stack and 5xx messages are replaced by `Internal Server
-Error`.
+A client over the `/api` rate limit is answered with `429` before the body is parsed.
+The error handler answers with JSON (`{ status: false, message, requestId }`) when the path is under `/api`, the
+request is an XHR, or the client prefers JSON, and with a small HTML page (showing the request id) otherwise. Error `status` / `statusCode` values between 400
+and 599 are kept; anything else becomes 500. 5xx errors are logged. When `NODE_ENV` is `development` or `test` the
+response also contains the stack trace; with any other `NODE_ENV`, including unset, there is no stack and 5xx messages
+are replaced by `Internal Server Error`.
 
 ### How application code is found
 
@@ -339,7 +343,7 @@ All settings come from environment variables, loaded from `.env` in the applicat
 | `BODY_LIMIT` | `1mb` | Maximum JSON and urlencoded body size. Larger bodies get `413`. |
 | `LOG_LEVEL` | `info` | winston level: `error`, `warn`, `info`, `http`, `verbose`, `debug`, `silly`. |
 | `TRUST_PROXY` | unset | Express `trust proxy`: `true`, `false`, a hop count, or an Express trust string such as `loopback`. `.env.example` sets `false`. |
-| `SHUTDOWN_TIMEOUT` | `10000` | Milliseconds allowed for graceful shutdown before the process is forced to exit. |
+| `SHUTDOWN_TIMEOUT` | `10000` | Milliseconds allowed for graceful shutdown before the process is forced to exit (counted after `SHUTDOWN_DELAY`). |
 | `OPENAPI_ENABLED` | on in `development` / `test` | Serves the generated OpenAPI document at `GET /api/openapi.json` and Swagger UI at `GET /api/docs`. Empty in `.env.example`, so it follows `NODE_ENV`; set `true` to publish it in another environment. |
 | `OPENAPI_UI` | `true` | `false` keeps `/api/openapi.json` but not the `/api/docs` page. |
 | `AVEROA_ROOT` | auto-detected | Application root. Only needed when the process starts outside the project folder. |
@@ -364,6 +368,25 @@ All settings come from environment variables, loaded from `.env` in the applicat
 
 Invalid values (an unknown store, `RATE_LIMIT_MAX=abc`, `0`) stop the application at startup instead of silently
 changing a limit.
+| `AVEROA_ROOT` | auto-detected | Application root. Only needed when the process starts outside the project folder. |
+
+### Logging, request IDs and health checks
+
+See [Observability](#observability) for the details.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `LOG_CHANNEL` | unset | `stdout`, `file` or `both`. Unset: files in `storages/logs`, plus the console unless `NODE_ENV=production` (`test` also hides the request log). `stdout` writes nothing to disk. |
+| `LOG_FORMAT` | `pretty` for `development` / `test`, `json` otherwise | Console format of the application log: `json` or `pretty`. Files are always JSON lines. |
+| `ACCESS_LOG_FORMAT` | `combined` in files; `json` or `dev` on stdout | HTTP access log format: `combined`, `json` or `dev` (stdout only). |
+| `LOG_REDACT` | empty | Extra keys to redact in logged objects, comma separated. |
+| `TRUST_REQUEST_ID` | trusted only when `TRUST_PROXY` is set | `true` reuses a valid incoming `X-Request-Id`, `false` always generates one. |
+| `REQUEST_ID_HEADER` | `X-Request-Id` | Request id header name. |
+| `HEALTH_PATH` | `/health` | Liveness probe path; `false` or `off` disables it. |
+| `READY_PATH` | `/ready` | Readiness probe path; `false` or `off` disables it. |
+| `READY_TIMEOUT` | `2000` | Per-check timeout of the readiness probe, in milliseconds. |
+| `READY_CHECKS` | `database` | Built-in readiness checks: `database`, `queue` (RabbitMQ), comma separated; `none` for none. |
+| `SHUTDOWN_DELAY` | `0` | Milliseconds `/ready` answers `503` on `SIGTERM` / `SIGINT` before the server closes. |
 
 ### Uploads
 
@@ -538,6 +561,7 @@ Providers in `app/Providers` let you hook into the framework. Every method is op
 | `session()` | while building | Return extra `express-session` options (cookie options are merged). The store comes from `SESSION_STORE`; a `store` returned here wins over it. |
 | `rateLimit(defaults)` | while building, unless `RATE_LIMIT_ENABLED=false` | Return the global limiter's options (`{ path: '/api', name: 'global', windowMs, limit }` plus any `rateLimit()` option; `path: '/'` covers every route), or `false` to disable it. |
 | `uploads()` | while building | Return `{ inlineExtensions: [...] }` to change the inline allowlist for `/upload`, or `false` to stop serving `/upload`. Not present in the boilerplate's file; add it when needed. |
+| `health(checks)` | while building | Return the readiness checks for `/ready` (the built-in `{ database }` plus your own, e.g. Redis), or `false` to disable `/health` and `/ready`. See [Health checks](#health-checks). |
 | `end(app)` | after routes and static files, before the 404 handler | Register fallbacks, for example a custom 404 page. |
 | `server(server)` | after the HTTP server starts listening | Attach to the `http.Server` (for example a WebSocket server). Not called by `createApp()`. |
 | `shutdown()` | on `SIGTERM` / `SIGINT`, after the HTTP server has closed | Release your own resources before the database and queue connections close. |
@@ -1252,7 +1276,7 @@ command fails and nothing is created.
 | `Model`, `Crud`, `FilterSearch` | See [Models](#models) and [CRUD and query filters](#crud-and-query-filters). |
 | `Mail`, `Queue`, `startMailWorker`, `closeQueue` | See [Mail, queues and jobs](#mail-queues-and-jobs). |
 | `View` | The shared Edge instance. |
-| `Log` | winston logger writing to `storages/logs/averoa.log`, and to the console outside `production`. Level from `LOG_LEVEL`. |
+| `Log` | winston logger: JSON lines with timestamp, level, message and `requestId`, sensitive fields redacted. See [Logging](#logging). |
 | `Fetch` | An axios instance configured by `config/fetch.js`. |
 | `Validator` | The [validator](https://www.npmjs.com/package/validator) package. |
 | `appRoot`, `appPath`, `importApp` | Application-root helpers, also available from `@averoa/utilities/paths`. |
@@ -1368,11 +1392,167 @@ default with `SESSION_STORE=redis`), otherwise each instance counts on its own a
       `POST /api/users` and the Teacher writes require a JWT; `/users` and the Teacher reads are public.
 - [ ] `OPENAPI_ENABLED` unset or `false`, unless the API description should be public (it is off by default outside
       development and test).
-- [ ] `storages/logs` and `storages/upload` writable and persistent. Logs are appended to indefinitely; rotate them
-      with your platform's tools. In production `Log` writes to the file only.
+- [ ] `storages/upload` writable and persistent. With file logging, `storages/logs` too: logs are appended to
+      indefinitely; rotate them with your platform's tools. In production `Log` writes to the file only unless
+      `LOG_CHANNEL` says otherwise.
+- [ ] In containers: `LOG_CHANNEL=stdout` and `LOG_FORMAT=json`, so the application and access logs are JSON lines on
+      stdout for the platform's log collector and nothing is written to the container filesystem.
+- [ ] Liveness probe on `/health`, readiness probe on `/ready` (see [Health checks](#health-checks)), and any checks
+      your app depends on (Redis, an upstream API) added in `AppProvider.health()`.
+- [ ] `SHUTDOWN_DELAY` set (for example `5000`) behind a load balancer or on Kubernetes, and the platform's grace
+      period longer than `SHUTDOWN_DELAY + SHUTDOWN_TIMEOUT`.
+- [ ] `TRUST_REQUEST_ID` decided: leave it unset (trusted with `TRUST_PROXY`) when your proxy sets or overwrites
+      `X-Request-Id`; set it to `false` when the proxy passes the client's header through.
 - [ ] Started with `npm start` (`node server.js`) under a process manager or container runtime, not `npm run dev`.
-      On `SIGTERM` the server stops accepting connections, calls `AppProvider.shutdown()`, closes the database,
-      queue and Redis connections, and exits; after `SHUTDOWN_TIMEOUT` ms it exits with code 1.
+      On `SIGTERM` `/ready` answers `503`, then (after `SHUTDOWN_DELAY`) the server stops accepting connections, calls
+      `AppProvider.shutdown()`, closes the database, queue and Redis connections, and exits; after `SHUTDOWN_TIMEOUT` ms it
+      exits with code 1.
+
+## Observability
+
+### Request IDs
+
+Every request gets an id, available as `req.id`, returned in the `X-Request-Id` response header, included as
+`requestId` in JSON error responses (`{ "status": false, "message": "Not Found", "requestId": "..." }`), shown on the
+HTML error page, and added to every log line written while the request is handled. Users can quote it in bug
+reports, and you can find every line of that request with one search.
+
+The id is a random UUID unless the request carries a **trusted** and **valid** `X-Request-Id`:
+
+- trusted: `TRUST_REQUEST_ID=true`, or `TRUST_REQUEST_ID` unset and `TRUST_PROXY` set, because a proxy in front of
+  the app is expected to set or sanitise the header. Without a proxy a client could otherwise choose its own id;
+- valid: 1 to 128 characters from `A-Z a-z 0-9 - _ . : + = / @`. Anything else is replaced, never echoed.
+
+Anywhere in the request (a controller, a repository, a model hook) the id is available without passing `req`
+around:
+
+```js
+import { getRequestId, addLogContext } from '@averoa/utilities';
+
+getRequestId();                       // '4b0d6c1e-8a5f-4c39-9d0e-2f1c7a1b9e55'
+addLogContext({ userId: req.user.id }); // added to every later log line of this request
+```
+
+### Logging
+
+`Log` from `@averoa/utilities` writes structured lines. Every line has `timestamp`, `level` and `message`, plus
+`requestId` during a request and the meta fields you pass:
+
+```js
+import { Log } from '@averoa/utilities';
+
+Log.info('order placed', { orderId: 42, card: { token: 'tok_123' } });
+```
+
+```json
+{"card":{"token":"[REDACTED]"},"level":"info","message":"order placed","orderId":42,"requestId":"4b0d6c1e-8a5f-4c39-9d0e-2f1c7a1b9e55","timestamp":"2026-11-16T09:30:00.000Z"}
+```
+
+- **Format.** `LOG_FORMAT=json` (default unless `NODE_ENV` is `development` or `test`) or `pretty` (a readable line
+  with the request id, the default for local work). Files are always JSON lines.
+- **Destination.** `LOG_CHANNEL=stdout` (containers: nothing is written to disk), `file` or `both`. Unset keeps the
+  files in `storages/logs` plus the console outside production.
+- **Redaction.** Values of keys such as `authorization`, `cookie`, `password`, `secret`, `token`, `apiKey`, `_csrf`
+  are logged as `[REDACTED]` at any depth, and `Bearer` / `Basic` credentials inside strings are masked. Add keys
+  with `LOG_REDACT=ssn,iban`. Redaction does not see secrets interpolated into free text, so pass data as meta.
+
+The HTTP access log follows `LOG_CHANNEL` too. `ACCESS_LOG_FORMAT=json` (the default on stdout in production) writes
+one JSON line per request with `requestId`, `method`, `path` (without the query string), `status`, `durationMs`, `ip`
+(the client address from `X-Forwarded-For` only when `TRUST_PROXY` is set) and `userAgent`. Files keep the Apache
+`combined` format unless `ACCESS_LOG_FORMAT=json`. Health probes are not logged.
+
+Recommended for containers:
+
+```dotenv
+NODE_ENV=production
+LOG_CHANNEL=stdout
+LOG_FORMAT=json
+```
+
+### Health checks
+
+| Endpoint | Purpose | Answer |
+| --- | --- | --- |
+| `GET /health` | liveness: is the process alive? | always `200 {"status":"ok"}`; checks nothing, so a database outage does not restart the container |
+| `GET /ready` | readiness: can it take traffic? | `200` when every check passes, `503` with the status of each check otherwise, and `503 {"status":"shutting_down"}` during a graceful shutdown |
+
+```bash
+curl -s localhost:8888/ready
+# {"status":"ok","checks":{"database":{"status":"up","durationMs":1.2}}}
+# database down: HTTP 503
+# {"status":"error","checks":{"database":{"status":"down","durationMs":2001.3,"error":"timeout"}}}
+```
+
+`/ready` runs `select 1` on the database with a `READY_TIMEOUT` (2000 ms) limit; `READY_CHECKS=database,queue` also
+checks the RabbitMQ connection. Error details are only shown when `NODE_ENV` is `development` or `test`; otherwise
+`error` is `timeout` or `failed` and the details go to the log. Add your own checks in `AppProvider.health()`:
+
+```js
+// app/Providers/AppProvider.js
+health(checks) {
+  return {
+    ...checks,                                                // keep the database check
+    redis: () => redisClient.ping(),                          // down → /ready answers 503
+    search: { check: () => pingSearch(), critical: false },   // reported, never fails readiness
+  };
+}
+```
+
+A check fails when it throws, rejects, takes longer than its timeout or returns `false`. Return `false` from
+`health()` to disable both endpoints, or move them with `HEALTH_PATH` / `READY_PATH` (`off` disables one).
+
+The probes answer before `AppProvider.beginning()`, sessions, CSRF and the access log: they never set a cookie, need
+no CSRF token and are not rate limited or authenticated by middleware you add in `beginning()` or in your routes.
+
+**Graceful shutdown.** On `SIGTERM` `/ready` switches to `503` immediately while `/health` stays `200`. With
+`SHUTDOWN_DELAY=5000` the app keeps serving for 5 seconds so the load balancer stops sending traffic, then closes the
+server, runs `AppProvider.shutdown()` and closes the database, queue and Redis connections within `SHUTDOWN_TIMEOUT`.
+
+**Docker.** Run `node server.js` directly (not through `npm`) so the process receives `SIGTERM`, and probe with Node
+itself (no `curl` needed in slim images):
+
+```dockerfile
+ENV NODE_ENV=production LOG_CHANNEL=stdout LOG_FORMAT=json APP_PORT=8888
+CMD ["node", "server.js"]
+HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.APP_PORT||3000)+'/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+```
+
+Docker and Compose have a single health status, so the example probes `/ready`; use `/health` instead if a database
+outage should not mark the container unhealthy.
+
+**Kubernetes.**
+
+```yaml
+spec:
+  terminationGracePeriodSeconds: 30        # > SHUTDOWN_DELAY + SHUTDOWN_TIMEOUT
+  containers:
+    - name: app
+      image: registry.example.com/averoa-app:latest
+      ports:
+        - containerPort: 8888
+      env:
+        - { name: NODE_ENV, value: production }
+        - { name: LOG_CHANNEL, value: stdout }
+        - { name: LOG_FORMAT, value: json }
+        - { name: TRUST_PROXY, value: "1" }
+        - { name: SHUTDOWN_DELAY, value: "5000" }
+        - { name: SHUTDOWN_TIMEOUT, value: "15000" }
+      startupProbe:
+        httpGet: { path: /health, port: 8888 }
+        periodSeconds: 2
+        failureThreshold: 30
+      livenessProbe:
+        httpGet: { path: /health, port: 8888 }
+        periodSeconds: 10
+        timeoutSeconds: 2
+        failureThreshold: 3
+      readinessProbe:
+        httpGet: { path: /ready, port: 8888 }
+        periodSeconds: 5
+        timeoutSeconds: 3          # > READY_TIMEOUT
+        failureThreshold: 2
+```
 
 ## Testing and linting
 
@@ -1387,6 +1567,7 @@ npm test
 | `tests/app.test.js` | Boots the real app with `createApp()` on in-memory SQLite (`better-sqlite3`), runs the migrations and seeders, and tests the sample routes, CSRF, the JWT flow and the Teacher CRUD over HTTP, including `401` for writes without a token |
 | `tests/openapi.test.js` | `/api/openapi.json` lists the Teacher CRUD (model schema, filters, bearer auth on writes) and the auth endpoints, hidden columns stay out of the schemas, and `validate()` rejects bad login bodies with `422` |
 | `tests/rate-limit.test.js` | The login limiter (`429` after 5 failures per IP and email, separate counters per account and IP, case-insensitive emails, successes not counted, the per-IP limit) and the global `/api` limiter headers |
+| `tests/observability.test.js` | `/health` and `/ready` on the real app, the `X-Request-Id` header, `requestId` in error responses, and the `AppProvider.health()` hook |
 | `tests/unit.test.js` | `PasswordHelper`, `UploadProvider` path sanitising (in a temporary app root), `UploadImageMiddleware` (`req.file`, `req.dataFiles` for `upload` columns, `422` / `400` errors) and the `TOKEN_SECRET` check |
 | `tests/helpers.js` | `setTestEnv()` (sets `NODE_ENV=test`, SQLite, random secrets) and a `fetch` client with a timeout |
 
