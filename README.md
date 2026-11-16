@@ -24,8 +24,9 @@ in three npm packages ([`@averoa/core`](#ecosystem), [`@averoa/routes`](#ecosyst
 
 > [!NOTE]
 > Version 2 is **ESM only** and requires **Node.js 20.19 or newer** on 20.x, 22.13 or newer on 22.x, or 24 and newer. If you are
-> coming from 1.x, read [Upgrading from 1.x](#upgrading-from-1x) first; for the changes in 2.1.0, see
-> [What's new in 2.1.0](#whats-new-in-210).
+> coming from 1.x, read [Upgrading from 1.x](#upgrading-from-1x) first; for the changes in 2.2.0, see
+> [2.2.0](#220), [2.2.0: authentication](#220-authentication) and
+> [2.2.0: jobs and scheduling](#220-jobs-and-scheduling).
 
 ## Table of contents
 
@@ -152,7 +153,7 @@ Open <http://localhost:8888> for the welcome page, or call the API:
 
 ```bash
 curl http://localhost:8888/api
-# {"name":"Averoa","version":"2.1.0"}
+# {"name":"Averoa","version":"2.2.0"}
 
 curl -X POST http://localhost:8888/api/auth/login \
   -H 'content-type: application/json' \
@@ -2101,9 +2102,10 @@ npm run lint:fix   # apply automatic fixes
 
 ## Upgrading from 1.x
 
-### Unreleased
+### 2.2.0
 
-Requires the next `@averoa/core` release (Redis session store and rate limiting).
+Uses `@averoa/core` 2.1.0, `@averoa/routes` 3.1.0 and `@averoa/utilities` 2.1.0 (Redis session store, rate
+limiting, request ids, health probes, OpenAPI).
 
 - **Rate limiting.** `/api` is limited to 100 requests per minute per client IP by default (`RATE_LIMIT_*`). Raise
   `RATE_LIMIT_MAX`, return options from `AppProvider.rateLimit()`, or set `RATE_LIMIT_ENABLED=false` if your clients
@@ -2114,7 +2116,7 @@ Requires the next `@averoa/core` release (Redis session store and rate limiting)
   `AppProvider.session()` (which still wins when present). Install `redis connect-redis rate-limit-redis`.
 - **`.env.example`** has the new `SESSION_*`, `REDIS_*`, `RATE_LIMIT_*` and `LOGIN_RATE_LIMIT_*` variables.
 
-### Unreleased: authentication
+### 2.2.0: authentication
 
 Changes that affect existing applications and their clients:
 
@@ -2131,10 +2133,10 @@ Changes that affect existing applications and their clients:
 - **`POST /api/users`** is for verified admins only (`403` for everyone else).
 - **Mail sender.** New `MAIL_FROM_ADDRESS` / `MAIL_FROM_NAME` set the sender of every email the app sends.
 
-### Unreleased: jobs and scheduling
+### 2.2.0: jobs and scheduling
 
-Needs the next release of `@averoa/utilities` (the `Job`, `startJobWorker` and `Schedule` exports, added after 2.0.2)
-and of `@averoa/core` (`make:job` generates a `Job` subclass). Changes that affect existing applications:
+Uses `@averoa/utilities` 2.1.0 (the `Job`, `startJobWorker` and `Schedule` exports) and `@averoa/core` 2.1.0
+(`make:job` generates a `Job` subclass). Changes that affect existing applications:
 
 - **Background jobs and a scheduler.** `npm run worker:jobs`, `npm run schedule:run` and `npm run queue:retry`
   (`workers/`), the schedule in `app/Console/Kernel.js`, and the sample jobs `SendWelcomeEmailJob` and
@@ -2214,10 +2216,10 @@ The complete list of breaking changes is in each package's changelog:
 
 | Package | Version | Description | Links |
 | --- | --- | --- | --- |
-| averoajs | 2.1.0 | This application boilerplate (not published to npm) | [GitHub](https://github.com/budiherma1/averoajs) |
-| `@averoa/core` | 2.0.1 | Builds the Express app (security, sessions, CSRF, CORS, views, routes, errors, shutdown), the knexfile and the `averoa` CLI | [GitHub](https://github.com/budiherma1/AveroaCore) · [npm](https://www.npmjs.com/package/@averoa/core) |
-| `@averoa/routes` | 3.0.1 | Laravel-style router: `'Controller@method'`, scopes, `*Form` routes, `crud()` hooks | [GitHub](https://github.com/budiherma1/AveroaRoute) · [npm](https://www.npmjs.com/package/@averoa/routes) |
-| `@averoa/utilities` | 2.0.2 | Model, Crud, FilterSearch, DB, Mail, Queue, mail worker, View, Log, Fetch, Validator | [GitHub](https://github.com/budiherma1/AveroaUtilities) · [npm](https://www.npmjs.com/package/@averoa/utilities) |
+| averoajs | 2.2.0 | This application boilerplate (not published to npm) | [GitHub](https://github.com/budiherma1/averoajs) |
+| `@averoa/core` | 2.1.0 | Builds the Express app (security, sessions, CSRF, CORS, views, routes, errors, shutdown), the knexfile and the `averoa` CLI | [GitHub](https://github.com/budiherma1/AveroaCore) · [npm](https://www.npmjs.com/package/@averoa/core) |
+| `@averoa/routes` | 3.1.0 | Laravel-style router: `'Controller@method'`, scopes, `*Form` routes, `crud()` hooks | [GitHub](https://github.com/budiherma1/AveroaRoute) · [npm](https://www.npmjs.com/package/@averoa/routes) |
+| `@averoa/utilities` | 2.1.0 | Model, Crud, FilterSearch, DB, Mail, Queue, mail worker, View, Log, Fetch, Validator | [GitHub](https://github.com/budiherma1/AveroaUtilities) · [npm](https://www.npmjs.com/package/@averoa/utilities) |
 | `@averoa/models`, `providers`, `repositories`, `helpers`, `jobs` | 1.0.3 | 1.x re-export packages, superseded by the `#` subpath imports | [models](https://www.npmjs.com/package/@averoa/models) · [providers](https://www.npmjs.com/package/@averoa/providers) · [repositories](https://www.npmjs.com/package/@averoa/repositories) · [helpers](https://www.npmjs.com/package/@averoa/helpers) · [jobs](https://www.npmjs.com/package/@averoa/jobs) |
 
 ## Troubleshooting

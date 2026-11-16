@@ -41,7 +41,7 @@ after(async () => {
 test('GET /api/openapi.json describes the app (AppProvider.openapi sets the title)', () => {
   assert.equal(doc.openapi, '3.1.0');
   assert.equal(doc.info.title, 'AveroaJS API');
-  assert.equal(doc.info.version, '2.1.0');
+  assert.equal(doc.info.version, '2.2.0');
 });
 
 test('teachers CRUD is documented with the model schema, filters and auth on writes', () => {
