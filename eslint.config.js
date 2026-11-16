@@ -90,4 +90,14 @@ export default [
       '@stylistic/no-multiple-empty-lines': ['error', { max: 1, maxEOF: 0 }],
     },
   },
+
+  // tests may import optional dependencies (e.g. @aws-sdk/client-s3); they skip when it is missing
+  {
+    files: ['tests/**/*.js'],
+    rules: {
+      'import-x/no-extraneous-dependencies': ['error', {
+        devDependencies: true, optionalDependencies: true, peerDependencies: false,
+      }],
+    },
+  },
 ];
