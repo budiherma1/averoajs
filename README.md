@@ -87,7 +87,9 @@ structure over assembling middleware by hand for every new service.
 | Models | Objection models whose `static column` map drives migrations, faker seeders and request validation; soft delete and audit columns; hidden columns |
 | REST resources | `node averoa make:crud <tables>` generates model, migration, seeder, controller and routes |
 | Query language | Thirteen filter operators, pagination, sorting, grouping, `$select`, `$relations`, all validated against the model's columns |
-| Authentication | JWT login (`POST /api/auth/login`) and a passport-local session strategy, scrypt password hashing |
+| Authentication | JWT login (`POST /api/auth/login`) with brute-force protection, a passport-local session strategy, scrypt password hashing |
+| Rate limiting | A global per-IP limit on `/api`, a strict limiter on the login route, `rateLimit()` for your own routes; counters in memory or shared through Redis |
+| Sessions | MemoryStore for development, `SESSION_STORE=redis` for production and several instances |
 | Views | Edge 5 templates with dot-notation names, global variables and a CSRF token in every view |
 | Mail and queues | Nodemailer with Edge templates, RabbitMQ publishing, and a mail worker with retries and reconnects |
 | Database | MySQL (`mysql2`, default), PostgreSQL (`pg`) and SQLite (`better-sqlite3`, `sqlite3`) through Knex |
@@ -164,7 +166,7 @@ Knex does not create the database itself.
 | `GET` | `/teacher` | `TeacherController@index` | renders `teacher.edge` |
 | `GET` | `/api` | `SampleController@sampleMethod` | `{ name, version }` |
 | `POST` | `/api/users` | `SampleController@sampleMethodModelPost` | behind `AuthMiddleware`; validates the body with `Users.validation()`; on success returns the user list (it does not insert) |
-| `POST` | `/api/auth/login` | `AuthController@login` | validates the body with `validate()` (`app/Validators/AuthValidator.js`), issues a JWT |
+| `POST` | `/api/auth/login` | `AuthController@login` | validates the body with `validate()` (`app/Validators/AuthValidator.js`), issues a JWT; behind `LoginRateLimitMiddleware` (`429` after 5 failed attempts per IP and email in 15 minutes) |
 | `GET` | `/api/auth/me` | `AuthController@me` | behind `AuthMiddleware` |
 | `GET` `POST` `PUT` `DELETE` | `/api/teachers`, `/api/teachers/:id` | `TeacherController` | `router.crud('Teacher', 'teachers', ...)`; `GET` is public, `POST` / `PUT` / `DELETE` are behind `AuthMiddleware` |
 | `GET` | `/api/v2/teachers` | `TeacherController@findAll` | nested `prefix()` example |
@@ -238,20 +240,23 @@ averoajs/
    `production` and `test`.
 7. Helmet, using the options returned by `AppProvider.helmet(defaults)`.
 8. CORS.
-9. `express.json()` and `express.urlencoded()` limited to `BODY_LIMIT`, then `cookie-parser`.
-10. `express-session` (merged with `AppProvider.session()`), `passport.initialize()` and `passport.session()`.
-11. `config()` of every export of `app/Strategies/index.js`.
-12. Bind Objection to the shared Knex instance.
-13. Register the Edge view engine and `ViewProvider.global()`.
-14. Load `routes/api.js` and `routes/web.js` and resolve every controller, middleware and model they reference.
-15. CSRF protection (unless `CSRF_ENABLED=false`).
-16. Mount the API router at `/api` and the web router at `/`.
-17. Serve `public/` at `/` and `storages/upload` at `/upload`.
-18. `AppProvider.end(app)`.
-19. 404 handler and error handler.
+9. The global rate limiter on `/api` (`RATE_LIMIT_*`, `AppProvider.rateLimit(defaults)`). When a Redis store is
+   selected, Redis is connected first; outside `development` / `test` startup fails if it is unreachable.
+10. `express.json()` and `express.urlencoded()` limited to `BODY_LIMIT`, then `cookie-parser`.
+11. `express-session` with the store from `SESSION_STORE` (merged with `AppProvider.session()`),
+    `passport.initialize()` and `passport.session()`.
+12. `config()` of every export of `app/Strategies/index.js`.
+13. Bind Objection to the shared Knex instance.
+14. Register the Edge view engine and `ViewProvider.global()`.
+15. Load `routes/api.js` and `routes/web.js` and resolve every controller, middleware and model they reference.
+16. CSRF protection (unless `CSRF_ENABLED=false`).
+17. Mount the API router at `/api` and the web router at `/`.
+18. Serve `public/` at `/` and `storages/upload` at `/upload`.
+19. `AppProvider.end(app)`.
+20. 404 handler and error handler.
 
 `start()` then listens on `options.port`, `APP_PORT` or `3000` (all interfaces), calls `AppProvider.server(server)`
-and installs the graceful-shutdown handlers. `createApp()` runs steps 1 to 19 without listening; the test suite uses it.
+and installs the graceful-shutdown handlers. `createApp()` runs steps 1 to 20 without listening; the test suite uses it.
 
 | Function | Returns | Options |
 | --- | --- | --- |
@@ -263,7 +268,7 @@ and installs the graceful-shutdown handlers. `createApp()` runs steps 1 to 19 wi
 ```mermaid
 flowchart TD
   req(["HTTP request"]) --> early["AppProvider.beginning() middleware"]
-  early --> base["morgan → helmet → CORS → body parsers → cookies → session → passport"]
+  early --> base["morgan → helmet → CORS → rate limit (/api) → body parsers → cookies → session → passport"]
   base --> csrf{"CSRF check"}
   csrf -->|"path under /api"| api["API router"]
   csrf -->|"other paths"| web["web router"]
@@ -278,11 +283,12 @@ flowchart TD
   stat -.-> err
 ```
 
-The error handler answers with JSON (`{ status: false, message }`) when the path is under `/api`, the request is an
-XHR, or the client prefers JSON, and with a small HTML page otherwise. Error `status` / `statusCode` values between 400
-and 599 are kept; anything else becomes 500. 5xx errors are logged. When `NODE_ENV` is `development` or `test` the
-response also contains the stack trace; with any other `NODE_ENV`, including unset, there is no stack and 5xx messages
-are replaced by `Internal Server Error`.
+A client over the `/api` rate limit is answered with `429` before the body is parsed. The error handler answers with
+JSON (`{ status: false, message }`) when the path is under `/api`, the request is an XHR, or the client prefers JSON,
+and with a small HTML page otherwise. Error `status` / `statusCode` values between 400 and 599 are kept; anything else
+becomes 500. 5xx errors are logged. When `NODE_ENV` is `development` or `test` the response also contains the stack
+trace; with any other `NODE_ENV`, including unset, there is no stack and 5xx messages are replaced by `Internal Server
+Error`.
 
 ### How application code is found
 
@@ -337,6 +343,27 @@ All settings come from environment variables, loaded from `.env` in the applicat
 | `OPENAPI_ENABLED` | on in `development` / `test` | Serves the generated OpenAPI document at `GET /api/openapi.json` and Swagger UI at `GET /api/docs`. Empty in `.env.example`, so it follows `NODE_ENV`; set `true` to publish it in another environment. |
 | `OPENAPI_UI` | `true` | `false` keeps `/api/openapi.json` but not the `/api/docs` page. |
 | `AVEROA_ROOT` | auto-detected | Application root. Only needed when the process starts outside the project folder. |
+
+### Sessions, Redis and rate limiting
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SESSION_STORE` | `memory` | `memory` (express-session's MemoryStore: one process only, lost on restart, warns outside `development` / `test`) or `redis` (shared by every instance; needs `npm install redis connect-redis`). |
+| `SESSION_REDIS_PREFIX` | `sess:` | Redis key prefix for sessions. Use a distinct prefix per application when several share a Redis. |
+| `SESSION_TTL` | `86400` | Seconds a session lives in Redis when the cookie has no `maxAge`. |
+| `REDIS_URL` | unset | `redis://[user:password@]host:port[/db]` (`rediss://` for TLS). Required when a Redis store is selected. One connection is shared by sessions and rate limits. |
+| `REDIS_CONNECT_TIMEOUT` | `5000` | Milliseconds to wait for Redis at startup. Outside `development` / `test` the application refuses to start when Redis is not reachable in time; in `development` / `test` it logs a warning, starts and keeps reconnecting. |
+| `RATE_LIMIT_ENABLED` | `true` | `false`, `0`, `no` or `off` turns the global `/api` limiter off (the login limiter stays). |
+| `RATE_LIMIT_WINDOW_MS` | `60000` | Window of the global `/api` limiter. |
+| `RATE_LIMIT_MAX` | `100` | Requests per client IP and window on `/api`. |
+| `RATE_LIMIT_STORE` | `redis` when `SESSION_STORE=redis`, else `memory` | Where every limiter keeps its counters: `memory` (each process counts on its own) or `redis` (shared; needs `npm install redis rate-limit-redis`). |
+| `RATE_LIMIT_REDIS_PREFIX` | `rl:` | Redis key prefix for rate-limit counters. |
+| `LOGIN_RATE_LIMIT_MAX` | `5` | Failed logins per IP and email per window before `POST /api/auth/login` answers `429`. |
+| `LOGIN_RATE_LIMIT_IP_MAX` | `50` | Failed logins per IP (any email) per window. |
+| `LOGIN_RATE_LIMIT_WINDOW_MS` | `900000` | Window of both login limiters (15 minutes). |
+
+Invalid values (an unknown store, `RATE_LIMIT_MAX=abc`, `0`) stop the application at startup instead of silently
+changing a limit.
 
 ### Uploads
 
@@ -493,6 +520,7 @@ export default new AdminMiddleware();
 | --- | --- |
 | `AuthMiddleware.js` | Requires a valid JWT (`JwtStrategy`); sets `req.user` or answers `401`. |
 | `LoginMiddleware.js` | Runs `LocalStrategy` for a session login form. Not mounted on any route. |
+| `LoginRateLimitMiddleware.js` | Brute-force protection for `POST /api/auth/login`: `429` after repeated failed logins. See [Rate limiting](#rate-limiting). |
 | `UploadImageMiddleware.js` | Accepts one image in the `image` field, for custom controllers and `upload` columns. See [File uploads](#file-uploads). |
 | `ErrorMiddleware.js` | Sample that always forwards a `401` error ("Please login to view this page."). |
 
@@ -507,7 +535,8 @@ Providers in `app/Providers` let you hook into the framework. Every method is op
 | --- | --- | --- |
 | `beginning(app)` | before any framework middleware | Register middleware that must run first. It runs before helmet, CORS, sessions and CSRF. |
 | `helmet(defaults)` | while building | Return helmet options (for example a relaxed CSP), or `false` to disable helmet. Returning nothing keeps the defaults. |
-| `session()` | while building | Return extra `express-session` options, typically a `store`. Cookie options are merged. |
+| `session()` | while building | Return extra `express-session` options (cookie options are merged). The store comes from `SESSION_STORE`; a `store` returned here wins over it. |
+| `rateLimit(defaults)` | while building, unless `RATE_LIMIT_ENABLED=false` | Return the global limiter's options (`{ path: '/api', name: 'global', windowMs, limit }` plus any `rateLimit()` option; `path: '/'` covers every route), or `false` to disable it. |
 | `uploads()` | while building | Return `{ inlineExtensions: [...] }` to change the inline allowlist for `/upload`, or `false` to stop serving `/upload`. Not present in the boilerplate's file; add it when needed. |
 | `end(app)` | after routes and static files, before the 404 handler | Register fallbacks, for example a custom 404 page. |
 | `server(server)` | after the HTTP server starts listening | Attach to the `http.Server` (for example a WebSocket server). Not called by `createApp()`. |
@@ -885,6 +914,7 @@ curl http://localhost:8888/api/auth/me -H 'authorization: Bearer eyJ...'
 | --- | --- |
 | `422 { status: false, data: { column, message: 'required' } }` | `email` or `password` missing or not a string |
 | `401 { status: false, message: 'Invalid email or password' }` | Unknown email, wrong password, or soft-deleted user |
+| `429 { status: false, message: 'Too many login attempts, please try again later.', code: 'ERATELIMIT' }` | Too many failed logins (see [Rate limiting](#rate-limiting)); `Retry-After` says how many seconds to wait |
 | `401 { status: false, message: 'Unauthorized' }` | Missing, expired or invalid token on a route behind `AuthMiddleware` |
 
 | File | Role |
@@ -892,6 +922,7 @@ curl http://localhost:8888/api/auth/me -H 'authorization: Bearer eyJ...'
 | `routes/api.js` | `POST /auth/login`; `GET /auth/me` and `POST /users` inside `router.middleware(['AuthMiddleware'], ...)`; the Teacher `post` / `put` / `delete` routes with `['AuthMiddleware']` as route middleware |
 | `app/Controllers/AuthController.js` | Checks the credentials and signs `{ id }` with `TOKEN_SECRET` (HS256, `TOKEN_EXPIRES_IN`) |
 | `app/Middleware/AuthMiddleware.js` | Calls `JwtStrategy.authenticate()` |
+| `app/Middleware/LoginRateLimitMiddleware.js` | Brute-force protection on the login route (route middleware) |
 | `app/Strategies/JwtStrategy.js` | Verifies the bearer token, loads the active user into `req.user` |
 | `app/Repositories/UserRepository.js` | User lookup and password check; unknown emails are checked against a dummy hash so that response time does not reveal which accounts exist |
 | `app/Helpers/PasswordHelper.js` | scrypt hashing with `node:crypto` (format `scrypt$N$r$p$salt$key`) |
@@ -1243,7 +1274,8 @@ Long or reused queries belong in `app/Repositories` (`node averoa make:repositor
 | --- | --- |
 | Headers | helmet 8. The CSP allows the application's own scripts, styles, fonts and images, inline styles and Google Fonts. `upgrade-insecure-requests` is added in production. Change it in `AppProvider.helmet()`. |
 | CSRF | Session synchronizer token, see below. |
-| Sessions | `httpOnly`, `sameSite: 'lax'`, `saveUninitialized: false`. The cookie is `secure` unless `NODE_ENV` is `development` or `test`. |
+| Sessions | `httpOnly`, `sameSite: 'lax'`, `saveUninitialized: false`. The cookie is `secure` unless `NODE_ENV` is `development` or `test`. Stored in memory or, with `SESSION_STORE=redis`, in Redis. |
+| Rate limiting | `/api` limited per client IP; `POST /api/auth/login` limited per IP and email and per IP on failed attempts. See below. |
 | CORS | Whitelist-based, see below. |
 | Bodies | JSON and urlencoded bodies are limited to `BODY_LIMIT`. |
 | Uploads | Size and count limits; sanitised file names that cannot leave `storages/upload`; sandboxed serving. See [File uploads](#file-uploads). |
@@ -1281,15 +1313,51 @@ Long or reused queries belong in `app/Repositories` (`node averoa make:repositor
 Same-origin detection compares the `Origin` host and port with the request's `Host`; the scheme is compared only when
 `TRUST_PROXY` trusts a proxy.
 
+### Rate limiting
+
+`@averoa/core` mounts a global limiter on `/api` (`RATE_LIMIT_MAX` requests per `RATE_LIMIT_WINDOW_MS`, default 100
+per minute, per client IP) before body parsing and sessions. Responses carry the standard `RateLimit` and
+`RateLimit-Policy` headers; over the limit the answer is `429` with `Retry-After` and
+`{ status: false, message, code: 'ERATELIMIT' }` (JSON for `/api` and JSON clients, an HTML page otherwise).
+
+`POST /api/auth/login` has a stricter limiter, `app/Middleware/LoginRateLimitMiddleware.js`. Only failed attempts
+count (a successful login gives its attempt back):
+
+- 5 failures per IP and email in 15 minutes (`LOGIN_RATE_LIMIT_MAX`), after which even the right password gets `429`
+  until the window ends. The email is lower-cased and trimmed, and only its SHA-256 hash is used as a key;
+- 50 failures per IP in 15 minutes for any email (`LOGIN_RATE_LIMIT_IP_MAX`), against credential stuffing.
+
+Add limits to your own routes with `rateLimit()` from `@averoa/core`. Give every limiter a unique `name` (its key in
+a shared store) and create it once, at module level:
+
+```js
+// routes/api.js
+import { rateLimit } from '@averoa/core';
+
+const exportLimit = rateLimit({ name: 'export', windowMs: 60 * 60 * 1000, limit: 10 });
+router.get('/reports/export', 'ReportController@export', ['AuthMiddleware', exportLimit]);
+```
+
+Limits are counted per client IP, so `TRUST_PROXY` matters: behind a reverse proxy set it (e.g. `1`), or every client
+shares the proxy's address and one user can block everyone; without a proxy keep it `false`, or clients can choose
+their IP with `X-Forwarded-For` and escape the limit. With several instances use `RATE_LIMIT_STORE=redis` (the
+default with `SESSION_STORE=redis`), otherwise each instance counts on its own and the effective limit is multiplied.
+
 ### Production checklist
 
 - [ ] `NODE_ENV=production`.
 - [ ] `TOKEN_SECRET` and `SESSION_SECRET` set to long random values (`npm run generate:token`), stored outside the
       repository.
-- [ ] A persistent session store returned from `AppProvider.session()`. The default MemoryStore logs a warning outside
-      development and test, leaks memory and does not work across processes.
-- [ ] `TRUST_PROXY` set when running behind a TLS-terminating proxy. The session cookie is `secure`, so browsers only
-      receive it over HTTPS as seen by Express.
+- [ ] A persistent session store: `SESSION_STORE=redis` with `REDIS_URL` (`npm install redis connect-redis
+      rate-limit-redis`), or a `store` returned from `AppProvider.session()`. The default MemoryStore logs a warning
+      outside development and test, leaks memory and does not work across processes. With Redis, the application
+      refuses to start while Redis is unreachable, so start Redis first.
+- [ ] Redis protected: password or ACL user in `REDIS_URL`, not reachable from the internet, TLS (`rediss://`) when it
+      crosses an untrusted network, and a `SESSION_REDIS_PREFIX` per application if several share it.
+- [ ] `TRUST_PROXY` set when running behind a TLS-terminating proxy, and only then. The session cookie is `secure`, so
+      browsers only receive it over HTTPS as seen by Express, and the rate limiters key on the client IP it yields.
+- [ ] Rate limits reviewed: `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS` fit your API's traffic, `RATE_LIMIT_STORE=redis`
+      when more than one instance runs, and the login limits (`LOGIN_RATE_LIMIT_*`) kept strict.
 - [ ] `CORS_WHITELIST` set to your real front-end origins. It is empty in `.env.example`, which outside development
       allows every origin without credentials, so a cross-origin front end that logs in with cookies needs it.
 - [ ] Database credentials set, the driver listed in `dependencies` (`better-sqlite3` is only a devDependency), and
@@ -1303,8 +1371,8 @@ Same-origin detection compares the `Origin` host and port with the request's `Ho
 - [ ] `storages/logs` and `storages/upload` writable and persistent. Logs are appended to indefinitely; rotate them
       with your platform's tools. In production `Log` writes to the file only.
 - [ ] Started with `npm start` (`node server.js`) under a process manager or container runtime, not `npm run dev`.
-      On `SIGTERM` the server stops accepting connections, calls `AppProvider.shutdown()`, closes the database and
-      queue connections, and exits; after `SHUTDOWN_TIMEOUT` ms it exits with code 1.
+      On `SIGTERM` the server stops accepting connections, calls `AppProvider.shutdown()`, closes the database,
+      queue and Redis connections, and exits; after `SHUTDOWN_TIMEOUT` ms it exits with code 1.
 
 ## Testing and linting
 
@@ -1318,11 +1386,21 @@ npm test
 | --- | --- |
 | `tests/app.test.js` | Boots the real app with `createApp()` on in-memory SQLite (`better-sqlite3`), runs the migrations and seeders, and tests the sample routes, CSRF, the JWT flow and the Teacher CRUD over HTTP, including `401` for writes without a token |
 | `tests/openapi.test.js` | `/api/openapi.json` lists the Teacher CRUD (model schema, filters, bearer auth on writes) and the auth endpoints, hidden columns stay out of the schemas, and `validate()` rejects bad login bodies with `422` |
+| `tests/rate-limit.test.js` | The login limiter (`429` after 5 failures per IP and email, separate counters per account and IP, case-insensitive emails, successes not counted, the per-IP limit) and the global `/api` limiter headers |
 | `tests/unit.test.js` | `PasswordHelper`, `UploadProvider` path sanitising (in a temporary app root), `UploadImageMiddleware` (`req.file`, `req.dataFiles` for `upload` columns, `422` / `400` errors) and the `TOKEN_SECRET` check |
 | `tests/helpers.js` | `setTestEnv()` (sets `NODE_ENV=test`, SQLite, random secrets) and a `fetch` client with a timeout |
 
 `npm test` runs `node --test tests/*.test.js`; the shell expands the pattern, so it works on every supported Node.js
 version. No database server is needed.
+
+The rate limiters and sessions use memory in the tests. To run the same suite against Redis, install the optional
+packages and point the stores at it, with a fresh prefix so counters from a previous run don't interfere:
+
+```bash
+npm install --no-save redis connect-redis rate-limit-redis
+SESSION_STORE=redis REDIS_URL=redis://127.0.0.1:6379 \
+  SESSION_REDIS_PREFIX=test-$RANDOM:sess: RATE_LIMIT_REDIS_PREFIX=test-$RANDOM:rl: npm test
+```
 
 Lint with ESLint 10 (flat config in `eslint.config.js`):
 
@@ -1332,6 +1410,19 @@ npm run lint:fix   # apply automatic fixes
 ```
 
 ## Upgrading from 1.x
+
+### Unreleased
+
+Requires the next `@averoa/core` release (Redis session store and rate limiting).
+
+- **Rate limiting.** `/api` is limited to 100 requests per minute per client IP by default (`RATE_LIMIT_*`). Raise
+  `RATE_LIMIT_MAX`, return options from `AppProvider.rateLimit()`, or set `RATE_LIMIT_ENABLED=false` if your clients
+  need more. Check `TRUST_PROXY` behind a proxy.
+- **Login brute-force protection.** `POST /api/auth/login` answers `429` after 5 failed attempts per IP and email (or
+  50 per IP) in 15 minutes (`LOGIN_RATE_LIMIT_*`, `app/Middleware/LoginRateLimitMiddleware.js`).
+- **Redis sessions without code.** `SESSION_STORE=redis` and `REDIS_URL` replace a hand-written `store` in
+  `AppProvider.session()` (which still wins when present). Install `redis connect-redis rate-limit-redis`.
+- **`.env.example`** has the new `SESSION_*`, `REDIS_*`, `RATE_LIMIT_*` and `LOGIN_RATE_LIMIT_*` variables.
 
 ### What's new in 2.1.0
 
@@ -1425,6 +1516,18 @@ regenerated.
 
 **Cross-origin requests get `403`.** A non-empty `CORS_WHITELIST` is enforced in every environment. Add your front
 end's origin, or leave it empty for local work.
+
+**`429 Too many login attempts` while testing locally.** The login limiter counts failed attempts per IP and email
+for 15 minutes. Wait for the window (`Retry-After` gives the seconds), restart the application (memory store), or
+raise `LOGIN_RATE_LIMIT_MAX` in development.
+
+**Every client gets `429` at the same time behind a proxy.** `TRUST_PROXY` is not set, so all requests seem to come
+from the proxy's IP. Set it to the number of proxies in front of the application (usually `1`).
+
+**`... but Redis at redis://... is not reachable within 5000ms ... Refusing to start`.** A Redis store is selected
+(`SESSION_STORE=redis` or `RATE_LIMIT_STORE=redis`) and Redis cannot be reached. Start Redis, fix `REDIS_URL`, or
+raise `REDIS_CONNECT_TIMEOUT`. `... needs the optional package "connect-redis"` means the package is not installed:
+run the `npm install` it shows.
 
 **A filter seems to have no effect.** Bare `column=value` keys for unknown or hidden columns, and `relation.column`
 keys without `$relations-type=join`, are ignored rather than rejected. Use the operator form (`column:eq=value`) to get

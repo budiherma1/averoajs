@@ -9,7 +9,9 @@ router.prefix('/v2', () => v2(router));
 
 // JWT auth example: POST /api/auth/login,
 // then call the routes below with "Authorization: Bearer <token>"
-router.post('/auth/login', 'AuthController@login', [AuthValidator.login]).doc({
+// the login limiter (429 after repeated failures, LOGIN_RATE_LIMIT_*) runs before validation
+const loginMiddleware = ['LoginRateLimitMiddleware', AuthValidator.login];
+router.post('/auth/login', 'AuthController@login', loginMiddleware).doc({
   summary: 'Log in and get a JWT',
   tags: ['Auth'],
   responses: {

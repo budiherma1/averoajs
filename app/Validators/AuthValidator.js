@@ -13,7 +13,8 @@ class AuthValidator {
         format: 'email',
         example: 'demo@averoa.test',
         validation: [
-          { run: (v) => v.validator.isEmail(v.value), msg: 'email format required' },
+          // surrounding spaces and case are normalised by UserRepository (and the login limiter)
+          { run: (v) => v.validator.isEmail(String(v.value).trim()), msg: 'email format required' },
           { run: (v) => v.validator.isLength(v.value, { max: 254 }), msg: 'must be at most 254 characters' },
         ],
       },
