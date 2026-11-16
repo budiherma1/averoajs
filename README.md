@@ -402,6 +402,7 @@ See [Observability](#observability) for the details.
 | --- | --- | --- |
 | `DB_CLIENT` | `mysql2` | `mysql2`, `pg`, `better-sqlite3` or `sqlite3`. `mysql` is mapped to `mysql2`. |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, `DB_NAME` | unset | Connection settings. For SQLite clients `DB_NAME` is the database file (default `:memory:`). `.env.example` sets `127.0.0.1:3306`. |
+| `DB_TIMEZONE` | `Z` | `mysql2` only: `Z`/`UTC`, an offset such as `+07:00`, or `local`. Sets the driver `timezone` and the session `time_zone` together, so timestamps written by MySQL and by the app use the same zone. `local` keeps the old behaviour (Node.js zone for the driver, server default for the session). |
 | `AVEROA_CONFIG_WAIT_MS` | `2000` | How long `@averoa/utilities` waits for `config/database.js` at import time before continuing to load it in the background. |
 
 ### Mail and queues
@@ -1569,7 +1570,7 @@ npm test
 | `tests/rate-limit.test.js` | The login limiter (`429` after 5 failures per IP and email, separate counters per account and IP, case-insensitive emails, successes not counted, the per-IP limit) and the global `/api` limiter headers |
 | `tests/observability.test.js` | `/health` and `/ready` on the real app, the `X-Request-Id` header, `requestId` in error responses, and the `AppProvider.health()` hook |
 | `tests/unit.test.js` | `PasswordHelper`, `UploadProvider` path sanitising (in a temporary app root), `UploadImageMiddleware` (`req.file`, `req.dataFiles` for `upload` columns, `422` / `400` errors) and the `TOKEN_SECRET` check |
-| `tests/helpers.js` | `setTestEnv()` (sets `NODE_ENV=test`, SQLite, random secrets) and a `fetch` client with a timeout |
+| `tests/helpers.js` | `setTestEnv()` (sets `NODE_ENV=test`, the test database, random secrets) and a `fetch` client with a timeout |
 
 `npm test` runs `node --test tests/*.test.js`; the shell expands the pattern, so it works on every supported Node.js
 version. No database server is needed.
@@ -1582,6 +1583,20 @@ npm install --no-save redis connect-redis rate-limit-redis
 SESSION_STORE=redis REDIS_URL=redis://127.0.0.1:6379 \
   SESSION_REDIS_PREFIX=test-$RANDOM:sess: RATE_LIMIT_REDIS_PREFIX=test-$RANDOM:rl: npm test
 ```
+
+
+To run `tests/app.test.js` against MySQL or PostgreSQL instead of in-memory SQLite, set `AVEROA_TEST_DB_URL`
+(PostgreSQL also needs `npm install --no-save pg`). The suite rolls back every migration first, so use a throwaway
+database:
+
+```bash
+AVEROA_TEST_DB_URL=mysql://user:pass@127.0.0.1:3306/averoa_test npm test
+AVEROA_TEST_DB_URL=postgres://user:pass@127.0.0.1:5432/averoa_test npm test
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs `npm ci`, `npm run lint` and `npm test` on Node.js 20, 22 and 24,
+and `npm test` against MySQL 8.4 and PostgreSQL 17 service containers. It installs the published `@averoa/*`
+packages from `package-lock.json`.
 
 Lint with ESLint 10 (flat config in `eslint.config.js`):
 

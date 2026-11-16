@@ -1,12 +1,15 @@
 // Integration tests: the real app (routes, controllers, models, migrations, seeds)
-// on top of @averoa/core's createApp(), with an in-memory better-sqlite3 database.
+// on top of @averoa/core's createApp(), with an in-memory better-sqlite3 database
+// (or MySQL / PostgreSQL through AVEROA_TEST_DB_URL, see tests/helpers.js).
 import {
   describe, test, before, after,
 } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import path from 'node:path';
-import { APP_ROOT, setTestEnv, client } from './helpers.js';
+import {
+  APP_ROOT, setTestEnv, client, usesTestDatabaseUrl,
+} from './helpers.js';
 
 setTestEnv();
 
@@ -29,7 +32,10 @@ before(async () => {
 
   const { app } = await createApp();
 
-  await DB.migrate.latest({ directory: path.join(APP_ROOT, 'database/migrations'), loadExtensions: ['.js'] });
+  const migrations = { directory: path.join(APP_ROOT, 'database/migrations'), loadExtensions: ['.js'] };
+  // a real server (AVEROA_TEST_DB_URL) may hold tables from an earlier run
+  if (usesTestDatabaseUrl()) await DB.migrate.rollback(migrations, true);
+  await DB.migrate.latest(migrations);
   await DB.seed.run({ directory: path.join(APP_ROOT, 'database/seeds'), loadExtensions: ['.js'] });
 
   server = app.listen(0, '127.0.0.1');
