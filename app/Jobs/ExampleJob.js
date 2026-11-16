@@ -1,6 +1,8 @@
+import { Log } from '@averoa/utilities';
+
 class ExampleJob {
   sample() {
-    console.log('ExampleJob');
+    Log.info('ExampleJob');
   }
 }
 

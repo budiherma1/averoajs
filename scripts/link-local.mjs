@@ -55,6 +55,7 @@ try {
     fs.rmSync(target, { recursive: true, force: true });
     fs.mkdirSync(target, { recursive: true });
     run('tar', ['-xzf', pkg.tarball, '-C', target, '--strip-components=1'], appDir);
+    // eslint-disable-next-line no-console -- CLI script: progress output is the point
     console.log(`linked @averoa/${pkg.name}@${pkg.version} from ${path.join(depsDir, pkg.dir)}`);
   }
 } finally {

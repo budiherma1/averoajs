@@ -9,6 +9,7 @@ const exec = () => randomBytes(64).toString('hex');
 // importing this module (e.g. through `#jobs`) has no side effect.
 const self = fileURLToPath(import.meta.url).replace(/\.js$/, '');
 if (process.argv[1] && path.resolve(process.argv[1]).replace(/\.js$/, '') === self) {
+  // eslint-disable-next-line no-console -- CLI: the secret is the command's output
   console.log(exec());
 }
 

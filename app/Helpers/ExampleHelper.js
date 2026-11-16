@@ -1,6 +1,8 @@
+import { Log } from '@averoa/utilities';
+
 class ExampleHelper {
   sample() {
-    console.log('ExampleHelper');
+    Log.info('ExampleHelper');
   }
 }
 
