@@ -1,4 +1,5 @@
-import { Crud } from '@averoa/utilities';
+import { Crud, Gate } from '@averoa/utilities';
+import { Teacher } from '#models';
 
 // Crud.* resolve { status: false, message, statusCode } on failure: 400 invalid
 // filter, 404 unknown or soft-deleted id, 422 validation, 500 database error.
@@ -12,8 +13,11 @@ class TeacherController {
     res.render('teacher', { name: 'Teacher Page', title: 'Averoa' });
   }
 
+  // routes/api.js: AuthMiddleware + EnsureEmailVerified. Only admins may choose
+  // the owner (TeacherPolicy#changeOwner); anyone else becomes the owner.
   async create(req, res) {
-    send(res, await Crud.create('Teacher', req), 201);
+    const option = await Gate.allows(req.user, 'changeOwner', Teacher) ? {} : { insert: { user_id: req.user.id } };
+    send(res, await Crud.create('Teacher', req, option), 201);
   }
 
   async findAll(req, res) {
@@ -24,8 +28,12 @@ class TeacherController {
     send(res, await Crud.findOne('Teacher', req));
   }
 
+  // routes/api.js: can('update', ...) already allowed it and left the row in
+  // res.locals.resource. Non-admins cannot move a teacher to another owner.
   async update(req, res) {
-    send(res, await Crud.update('Teacher', req));
+    const teacher = res.locals.resource;
+    const option = !teacher || await Gate.allows(req.user, 'changeOwner', teacher) ? {} : { update: { user_id: teacher.user_id } };
+    send(res, await Crud.update('Teacher', req, option));
   }
 
   async delete(req, res) {
