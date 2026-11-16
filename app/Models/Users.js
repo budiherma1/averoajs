@@ -9,7 +9,11 @@ class Users extends Model {
   static timestamp = true;
 
   // never serialized and never selectable through `$select`
-  static hidden = ['password', 'otp'];
+  static hidden = ['password', 'otp', 'token_version'];
+
+  // email_verified_at, token_version and is_admin (added by the migration
+  // 20261116100000_add_auth_columns_to_users.js) are deliberately not in `column`:
+  // clients can never write them through Crud or validation.
 
   static column = {
     id: {
@@ -62,6 +66,16 @@ class Users extends Model {
       validation: [{ run: optional((v) => v.validator.isNumeric(String(v.value), { no_symbols: true }) && String(v.value).length <= 20), msg: 'must be numeric, at most 20 digits' }],
     },
   };
+
+  /** Role flag of the authorization examples (TeacherPolicy). */
+  isAdmin() {
+    return Number(this.is_admin) === 1;
+  }
+
+  /** True once the email address was verified (EnsureEmailVerified middleware). */
+  hasVerifiedEmail() {
+    return this.email_verified_at != null;
+  }
 
   normalizeEmail() {
     if (typeof this.email === 'string') this.email = this.email.trim().toLowerCase();
