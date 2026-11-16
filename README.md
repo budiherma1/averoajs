@@ -40,6 +40,8 @@ in three npm packages ([`@averoa/core`](#ecosystem), [`@averoa/routes`](#ecosyst
 - [Controllers, middleware and providers](#controllers-middleware-and-providers)
 - [Models](#models)
 - [CRUD and query filters](#crud-and-query-filters)
+- [Validation](#validation)
+- [API documentation](#api-documentation)
 - [Authentication](#authentication)
 - [Views](#views)
 - [Mail, queues and jobs](#mail-queues-and-jobs)
@@ -162,11 +164,12 @@ Knex does not create the database itself.
 | `GET` | `/teacher` | `TeacherController@index` | renders `teacher.edge` |
 | `GET` | `/api` | `SampleController@sampleMethod` | `{ name, version }` |
 | `POST` | `/api/users` | `SampleController@sampleMethodModelPost` | behind `AuthMiddleware`; validates the body with `Users.validation()`; on success returns the user list (it does not insert) |
-| `POST` | `/api/auth/login` | `AuthController@login` | issues a JWT |
+| `POST` | `/api/auth/login` | `AuthController@login` | validates the body with `validate()` (`app/Validators/AuthValidator.js`), issues a JWT |
 | `GET` | `/api/auth/me` | `AuthController@me` | behind `AuthMiddleware` |
 | `GET` `POST` `PUT` `DELETE` | `/api/teachers`, `/api/teachers/:id` | `TeacherController` | `router.crud('Teacher', 'teachers', ...)`; `GET` is public, `POST` / `PUT` / `DELETE` are behind `AuthMiddleware` |
 | `GET` | `/api/v2/teachers` | `TeacherController@findAll` | nested `prefix()` example |
 | `GET` | `/api/v2/test`, `/api/v2/test/otherprefix` | `SampleController@sampleMethodView` | nested `prefix()` example |
+| `GET` | `/api/openapi.json`, `/api/docs` | `@averoa/core` | OpenAPI document and Swagger UI; only when `OPENAPI_ENABLED` (default: development/test). See [API documentation](#api-documentation) |
 
 These routes are samples. `/api/auth/me`, `POST /api/users` and the Teacher writes require a JWT (see
 [Authentication](#authentication)); the rest are public. Remove or protect them before you deploy (see
@@ -185,7 +188,8 @@ averoajs/
 │   ├── Models/               Objection models with column definitions  -> '#models'
 │   ├── Providers/            App, Middleware, Upload and View providers -> '#providers'
 │   ├── Repositories/         query classes                             -> '#repositories'
-│   └── Strategies/           passport strategies                       -> '#strategies'
+│   ├── Strategies/           passport strategies                       -> '#strategies'
+│   └── Validators/           validate() middleware for non-crud routes -> '#app/Validators/...'
 ├── config/
 │   ├── database.js           Knex configuration from DB_* variables
 │   ├── fetch.js              axios defaults for the Fetch utility from FETCH_* variables
@@ -330,6 +334,8 @@ All settings come from environment variables, loaded from `.env` in the applicat
 | `LOG_LEVEL` | `info` | winston level: `error`, `warn`, `info`, `http`, `verbose`, `debug`, `silly`. |
 | `TRUST_PROXY` | unset | Express `trust proxy`: `true`, `false`, a hop count, or an Express trust string such as `loopback`. `.env.example` sets `false`. |
 | `SHUTDOWN_TIMEOUT` | `10000` | Milliseconds allowed for graceful shutdown before the process is forced to exit. |
+| `OPENAPI_ENABLED` | on in `development` / `test` | Serves the generated OpenAPI document at `GET /api/openapi.json` and Swagger UI at `GET /api/docs`. Empty in `.env.example`, so it follows `NODE_ENV`; set `true` to publish it in another environment. |
+| `OPENAPI_UI` | `true` | `false` keeps `/api/openapi.json` but not the `/api/docs` page. |
 | `AVEROA_ROOT` | auto-detected | Application root. Only needed when the process starts outside the project folder. |
 
 ### Uploads
@@ -506,6 +512,7 @@ Providers in `app/Providers` let you hook into the framework. Every method is op
 | `end(app)` | after routes and static files, before the 404 handler | Register fallbacks, for example a custom 404 page. |
 | `server(server)` | after the HTTP server starts listening | Attach to the `http.Server` (for example a WebSocket server). Not called by `createApp()`. |
 | `shutdown()` | on `SIGTERM` / `SIGINT`, after the HTTP server has closed | Release your own resources before the database and queue connections close. |
+| `openapi(doc)` | on the first `GET /api/openapi.json` | Change the generated OpenAPI document (title, servers, extra schemas) and return it. The boilerplate sets the title. |
 
 ```js
 // app/Providers/AppProvider.js (excerpt): allow scripts from a CDN
@@ -753,6 +760,111 @@ buster), `utm:source=x` and similar. A bare `relation.column=v` without `$relati
 
 For plain Knex queries, `FilterSearch.knex(builder, req, { column: [...] })` from `@averoa/utilities` applies the same
 language with an explicit column whitelist.
+
+## Validation
+
+`crud()` routes are validated by their model (see [`crud()` model hooks](#crud-model-hooks)). Every other route can
+use `validate()` from `@averoa/utilities`, a middleware for `body`, `query`, `params` and `headers`. Rules are written
+like Model column rules; the boilerplate keeps them in `app/Validators`:
+
+```js
+// app/Validators/AuthValidator.js (excerpt)
+import { validate } from '@averoa/utilities';
+
+class AuthValidator {
+  login = validate({
+    body: {
+      email: {
+        type: 'string',
+        format: 'email',
+        validation: [{ run: (v) => v.validator.isEmail(v.value), msg: 'email format required' }],
+      },
+      password: {
+        type: 'string',
+        validation: [{ run: (v) => v.validator.isLength(v.value, { max: 128 }), msg: 'must be at most 128 characters' }],
+      },
+    },
+  });
+}
+
+export default new AuthValidator();
+```
+
+```js
+// routes/api.js
+import AuthValidator from '#app/Validators/AuthValidator.js';
+
+router.post('/auth/login', 'AuthController@login', [AuthValidator.login]);
+```
+
+A field definition takes `type` (`string`, `integer`, `number`, `boolean`, `object`, `array`; strings from the query
+string are coerced), `required` (default `true`), `default`, `enum` and `validation: [{ run, msg }]`, where `run`
+receives `{ validator, value, raw, data }`. Any [Standard Schema](https://standardschema.dev) validator works too,
+for example zod (`npm i zod`):
+
+```js
+import { z } from 'zod';
+import { validate } from '@averoa/utilities';
+
+router.get('/search', 'SearchController@index', [validate({
+  query: z.object({ q: z.string().min(2), page: z.coerce.number().int().min(1).default(1) }),
+})]);
+```
+
+A failure answers `422` in the same shape as model validation, plus the part that failed:
+
+```json
+{ "status": false, "data": { "column": "email", "message": ["email format required"], "in": "body" } }
+```
+
+On success the controller reads the parsed values from `req.validated.body`, `req.validated.query`,
+`req.validated.params` and `req.validated.headers`. `req.body` is replaced with the parsed body (undeclared keys
+removed; the original stays in `req.bodyRaw`). `req.query` is not changed, because Express 5 makes it a getter. See
+the [`@averoa/utilities` README](https://github.com/budiherma1/AveroaUtilities#request-validation) for every option.
+
+## API documentation
+
+In development and test the app serves an OpenAPI 3.1 document of every `routes/api.js` route at
+`GET /api/openapi.json`, and Swagger UI at `GET /api/docs`:
+
+```bash
+npm run dev
+curl http://localhost:8888/api/openapi.json
+open http://localhost:8888/api/docs
+```
+
+The document is generated from what the app already declares:
+
+- **Routes**: every path and verb, with `:id` written as `{id}`, tagged by controller or model name.
+- **`crud()` routes**: list, get, create, update and delete operations for the model, with the query filter
+  parameters (`limit`, `page`, `orderBy`, `$select`, `$relations`, ...), the `{ status, metadata, data }` envelope and
+  the `400` / `404` / `422` responses.
+- **Models**: a schema per model from `static column`, with types from the `migration` hints, required flags and the
+  rule messages. Hidden columns (`Users.password`, `Users.otp`) never appear in response schemas; `upload` columns are
+  binary fields on `*Form` routes.
+- **Authentication**: routes behind `AuthMiddleware` require the JWT bearer scheme (use **Authorize** in Swagger UI
+  with the token from `/api/auth/login`).
+- **`validate()`**: the request body and parameters it checks.
+
+Describe a route further by chaining `.doc()`:
+
+```js
+router.post('/auth/login', 'AuthController@login', [AuthValidator.login]).doc({
+  summary: 'Log in and get a JWT',
+  tags: ['Auth'],
+  responses: { 401: 'Invalid email or password' },
+});
+```
+
+`doc()` accepts `summary`, `description`, `tags`, `operationId`, `deprecated`, `security` (`false` for public),
+`request`, `responses`, `parameters`, `requestBody` and `exclude: true` (leave the route out). Change the whole
+document in `AppProvider.openapi(doc)`, for example to set `servers` or add shared schemas. The full reference is in
+the [`@averoa/core` README](https://github.com/budiherma1/AveroaCore#api-documentation-openapi).
+
+The endpoints are off unless `NODE_ENV` is `development` or `test`. `OPENAPI_ENABLED=true` turns them on elsewhere
+(the document lists every API route, so expose it only where that is acceptable); `OPENAPI_UI=false` keeps only the
+JSON. The docs page loads Swagger UI from jsDelivr, pinned with Subresource Integrity, under its own
+Content-Security-Policy; the rest of the app keeps the default CSP.
 
 ## Authentication
 
@@ -1186,6 +1298,8 @@ Same-origin detection compares the `Origin` host and port with the request's `Ho
       known password.
 - [ ] Sample routes (`/users`, `POST /api/users`, `/teacher`, `/api/teachers`, `/api/v2/*`) removed or protected. Only
       `POST /api/users` and the Teacher writes require a JWT; `/users` and the Teacher reads are public.
+- [ ] `OPENAPI_ENABLED` unset or `false`, unless the API description should be public (it is off by default outside
+      development and test).
 - [ ] `storages/logs` and `storages/upload` writable and persistent. Logs are appended to indefinitely; rotate them
       with your platform's tools. In production `Log` writes to the file only.
 - [ ] Started with `npm start` (`node server.js`) under a process manager or container runtime, not `npm run dev`.
@@ -1203,6 +1317,7 @@ npm test
 | File | Covers |
 | --- | --- |
 | `tests/app.test.js` | Boots the real app with `createApp()` on in-memory SQLite (`better-sqlite3`), runs the migrations and seeders, and tests the sample routes, CSRF, the JWT flow and the Teacher CRUD over HTTP, including `401` for writes without a token |
+| `tests/openapi.test.js` | `/api/openapi.json` lists the Teacher CRUD (model schema, filters, bearer auth on writes) and the auth endpoints, hidden columns stay out of the schemas, and `validate()` rejects bad login bodies with `422` |
 | `tests/unit.test.js` | `PasswordHelper`, `UploadProvider` path sanitising (in a temporary app root), `UploadImageMiddleware` (`req.file`, `req.dataFiles` for `upload` columns, `422` / `400` errors) and the `TOKEN_SECRET` check |
 | `tests/helpers.js` | `setTestEnv()` (sets `NODE_ENV=test`, SQLite, random secrets) and a `fetch` client with a timeout |
 

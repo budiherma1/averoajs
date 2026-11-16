@@ -37,6 +37,22 @@ class AppProvider {
   }
 
   /**
+   * [OpenAPI document served at GET /api/openapi.json
+   * (OPENAPI_ENABLED, default on in development/test only).
+   * Receives the generated document; change it and return it]
+   *
+   * @param   {[object]}  doc  [OpenAPI 3.1 document]
+   *
+   * @return  {[object]}
+   */
+  openapi(doc) {
+    doc.info.title = 'AveroaJS API';
+    // sample
+    // doc.servers = [{ url: 'https://api.example.com' }];
+    return doc;
+  }
+
+  /**
    * [Configuration for expressjs(app) placed in the end after another instance]
    *
    * @param   {[object]}  app  [app description]
